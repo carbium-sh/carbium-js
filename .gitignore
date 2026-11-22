@@ -9,6 +9,7 @@
 !/pnpm-workspace.yaml
 !/pnpm-lock.yaml
 !/tsconfig.base.json
+!/glama.json
 !/scripts/
 !/spec/
 !/packages/
