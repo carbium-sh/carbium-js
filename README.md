@@ -10,9 +10,16 @@ Carbium's JavaScript and TypeScript packages for Solana on [services.carbium.sh]
 
 Docs: https://carbium.sh/docs. The machine-readable guide is https://carbium.sh/skill.md.
 
-Status: pre-release. None of these packages is on npm yet; until their first release, build them from this repo with the
-commands below. Nothing here holds a private key, signs or sends: swap and DCA builds return an unsigned transaction
-for your own wallet.
+Install them from npm:
+
+```sh
+npm install @carbium/sdk      # the SDK, also on JSR: deno add jsr:@carbium/sdk
+npm install -g carbium        # the command line; binaries, Homebrew and Scoop: https://carbium.sh/sdk/cli
+npx -y @carbium/mcp           # the MCP server, started by your MCP client: https://carbium.sh/sdk/mcp
+```
+
+Each package has its own version and its own releases. Nothing here holds a private key, signs or sends: swap and DCA
+builds return an unsigned transaction for your own wallet.
 
 ## Development
 
