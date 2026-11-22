@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "sh.carbium/mcp",
+  "title": "Carbium",
+  "description": "Solana RPC and DAS reads, swap quotes, unsigned swap and DCA transactions, tokens, account usage.",
+  "websiteUrl": "https://carbium.sh",
+  "repository": { "url": "https://github.com/carbium-sh/carbium-js", "source": "github", "subfolder": "packages/mcp" },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@carbium/mcp",
+      "version": "0.1.0",
+      "runtimeHint": "npx",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        { "name": "CARBIUM_KEY", "description": "Service key for services.carbium.sh (RPC, DAS, quote, swap, prices). Optional: the keyless tools work without it.", "isRequired": false, "isSecret": true, "format": "string" },
+        { "name": "CARBIUM_ACCOUNT_KEY", "description": "Account API key for carbium.sh (usage, service keys, webhooks). Optional. Read-only unless CARBIUM_MCP_ALLOW_WRITES=1 and the key has full access.", "isRequired": false, "isSecret": true, "format": "string" },
+        { "name": "CARBIUM_MCP_ALLOW_WRITES", "description": "Set to 1 to list carbium_account_write (webhook pause, resume and test; key caps, limits, scope, allowlist; a free module plan). Off by default; a read-only account key is still refused.", "isRequired": false, "isSecret": false, "format": "string" }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/carbium-sh/carbium-mcp:0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        { "name": "CARBIUM_KEY", "description": "Service key for services.carbium.sh (RPC, DAS, quote, swap, prices). Optional: the keyless tools work without it.", "isRequired": false, "isSecret": true, "format": "string" },
+        { "name": "CARBIUM_ACCOUNT_KEY", "description": "Account API key for carbium.sh (usage, service keys, webhooks). Optional. Read-only unless CARBIUM_MCP_ALLOW_WRITES=1 and the key has full access.", "isRequired": false, "isSecret": true, "format": "string" },
+        { "name": "CARBIUM_MCP_ALLOW_WRITES", "description": "Set to 1 to list carbium_account_write (webhook pause, resume and test; key caps, limits, scope, allowlist; a free module plan). Off by default; a read-only account key is still refused.", "isRequired": false, "isSecret": false, "format": "string" }
+      ]
+    }
+  ]
+}

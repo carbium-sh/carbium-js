@@ -1,0 +1,16 @@
+{
+  "name": "carbium-js",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.10.0",
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "prepare": "git config core.hooksPath hooks || true",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "leak-check": "scripts/leak-check.sh HEAD",
+    "served-count": "node scripts/served-count.mjs"
+  }
+}

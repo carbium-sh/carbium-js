@@ -1,0 +1,214 @@
+# Publishes one package when a GitHub release named <package dir>-v<version> is published, for example sdk-v0.1.0:
+# npm through trusted publishing (OIDC, no token anywhere), plus JSR for the SDK and the ghcr.io image for the MCP
+# server. After the first publish by hand, the maintainer registers this workflow file with environment npm as each
+# package's trusted publisher on npmjs.com, so only the npm job (the one job in that environment, which runs no
+# third-party code) can get an npm publish token. Build and tests run in a job with no write token; the jsr job runs
+# jsr@0.14.3 and its own dependencies with an OIDC token JSR accepts. A cli release is the draft release.yml made: its
+# assets and their attestation are checked before npm. A version already on npm (the first ones, by hand) is not
+# published again, so the jobs after it still run.
+name: publish
+on:
+  release:
+    types: [published]
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      attestations: read
+    outputs:
+      name: ${{ steps.pkg.outputs.name }}
+      version: ${{ steps.pkg.outputs.version }}
+      tag: ${{ steps.pkg.outputs.tag }}
+      npm: ${{ steps.pkg.outputs.npm }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - id: pkg
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          name="${TAG%-v*}"; dir="packages/$name"; ver="${TAG##*-v}"
+          test -f "$dir/package.json" || { echo "no package for tag $TAG"; exit 1; }
+          test "$(node -p "require('./$dir/package.json').version")" = "$ver" || { echo "tag $TAG does not match $dir/package.json"; exit 1; }
+          # a prerelease (ticked, or a -suffix version) goes to next; a full release takes npm's own latest
+          case "$PRERELEASE:$ver" in true:* | *:*-*) tag=next ;; *) tag= ;; esac
+          { echo "name=$name"; echo "version=$ver"; echo "tag=$tag"; echo "npm=$(node -p "require('./$dir/package.json').name")"; } >> "$GITHUB_OUTPUT"
+      - run: scripts/leak-check.sh HEAD
+      - if: steps.pkg.outputs.name == 'cli'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/assets" && cd "$RUNNER_TEMP/assets"
+          gh release download "$TAG"
+          want=(SHA256SUMS install.sh Carbium.CLI.yaml Carbium.CLI.installer.yaml Carbium.CLI.locale.en-US.yaml carbium-darwin-arm64 carbium-darwin-x64 carbium-linux-arm64 carbium-linux-arm64-musl carbium-linux-x64 carbium-linux-x64-musl carbium-windows-arm64.exe carbium-windows-x64.exe)
+          have=(*)
+          [ "${#have[@]}" -eq "${#want[@]}" ] || { echo "the release holds ${#have[@]} files: ${have[*]}"; exit 1; }
+          for f in "${want[@]}"; do [ -f "$f" ] || { echo "the release lacks $f"; exit 1; }; done
+          sha256sum -c SHA256SUMS
+          for f in carbium-* install.sh; do gh attestation verify "$f" -R "$GH_REPO" --signer-workflow "$GH_REPO/.github/workflows/release.yml" --source-ref "refs/tags/$TAG" --source-digest "$GITHUB_SHA"; done
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build && pnpm typecheck && pnpm test && pnpm lint && pnpm served-count
+      - run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+        working-directory: packages/${{ steps.pkg.outputs.name }}
+      - if: steps.pkg.outputs.name == 'cli'
+        # The tarball being published, with @carbium/sdk from npm as npm users get it, proven before npm.
+        env:
+          VER: ${{ steps.pkg.outputs.version }}
+        run: |
+          npm install --prefix "$RUNNER_TEMP/try" --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP"/pack/*.tgz
+          test "$("$RUNNER_TEMP/try/node_modules/.bin/carbium" --version)" = "$VER"
+      - if: steps.pkg.outputs.name == 'mcp'
+        # The image as it will be pushed (the tarball being published; @carbium/sdk from npm), proven before npm.
+        run: |
+          docker build -q -t carbium-mcp:release -f packages/mcp/Dockerfile "$RUNNER_TEMP/pack"
+          node packages/mcp/test/smoke/image.mjs carbium-mcp:release packages/mcp/server.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package
+          path: ${{ runner.temp }}/pack/
+          if-no-files-found: error
+          retention-days: 3
+
+  npm:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: npm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@12.2.3
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+          path: pack
+      - run: |
+          if npm view "$PKG@$VER" version >/dev/null 2>&1; then echo "$PKG@$VER is on npm already"; else npm publish pack/*.tgz --access public ${NPM_TAG:+--tag "$NPM_TAG"}; fi
+        env:
+          PKG: ${{ needs.build.outputs.npm }}
+          VER: ${{ needs.build.outputs.version }}
+          NPM_TAG: ${{ needs.build.outputs.tag }}
+
+  jsr:
+    needs: [build, npm]
+    if: needs.build.outputs.name == 'sdk'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - run: npx --yes jsr@0.14.3 publish
+        working-directory: packages/sdk
+
+  image:
+    needs: [build, npm]
+    if: needs.build.outputs.name == 'mcp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+          path: pack
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: pack
+          file: packages/mcp/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ghcr.io/carbium-sh/carbium-mcp:${{ needs.build.outputs.version }}
+            ${{ needs.build.outputs.tag == '' && 'ghcr.io/carbium-sh/carbium-mcp:latest' || '' }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.build.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ghcr.io/carbium-sh/carbium-mcp
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+
+  verify:
+    # After npm: each release binary installs on its own platform through install.sh (the .exe on Windows) and prints
+    # the release.
+    needs: [build, npm]
+    if: needs.build.outputs.name == 'cli'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          WANT: ${{ needs.build.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          base="https://github.com/$REPO/releases/download/$TAG"
+          case "$RUNNER_OS" in
+            Windows)
+              asset="carbium-windows-$([ "$RUNNER_ARCH" = ARM64 ] && echo arm64 || echo x64).exe"
+              curl --proto '=https' --tlsv1.2 -fsSLO "$base/SHA256SUMS" -O "$base/$asset"
+              grep "  $asset\$" SHA256SUMS | sha256sum -c -
+              got="$("./$asset" --version | tr -d '\r')" ;;
+            *)
+              curl --proto '=https' --tlsv1.2 -fsSL "$base/install.sh" | CARBIUM_VERSION="$WANT" sh
+              got="$("$HOME/.carbium/bin/carbium" --version)" ;;
+          esac
+          [ "$got" = "$WANT" ] || { echo "carbium --version printed '$got', want '$WANT'"; exit 1; }
+          echo "carbium $got on $RUNNER_OS $RUNNER_ARCH"
+      # The line users run, with no CARBIUM_VERSION: install.sh reads npm's latest, which a full release has just become.
+      - if: needs.build.outputs.tag == '' && matrix.runner == 'ubuntu-24.04'
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          WANT: ${{ needs.build.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL "https://github.com/$REPO/releases/download/$TAG/install.sh" | CARBIUM_INSTALL="$RUNNER_TEMP/latest" sh
+          got="$("$RUNNER_TEMP/latest/bin/carbium" --version)"
+          [ "$got" = "$WANT" ] || { echo "the install with no CARBIUM_VERSION gave '$got', want '$WANT'"; exit 1; }

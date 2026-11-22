@@ -1,0 +1,15 @@
+{
+  "name": "@carbium/sdk",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./webhooks": "./src/webhooks.ts",
+    "./account": "./src/account.ts",
+    "./dca": "./src/dca.ts",
+    "./tokens": "./src/tokens.ts",
+    "./stream": "./src/stream.ts"
+  },
+  "imports": { "@triton-one/yellowstone-grpc": "npm:@triton-one/yellowstone-grpc@^10.0.0" },
+  "publish": { "include": ["src/**/*.ts", "README.md", "LICENSE"], "exclude": ["src/stream-unsupported.ts"] }
+}

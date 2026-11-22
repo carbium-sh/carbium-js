@@ -1,0 +1,55 @@
+{
+  "name": "carbium",
+  "version": "0.1.0",
+  "description": "Command line for Carbium's Solana services: sign in, service keys, every RPC and DAS method by name, quotes and unsigned swaps, WebSocket and Carbon Stream tails, webhooks, usage, DCA and token lookups",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/carbium-sh/carbium-js.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/carbium-sh/carbium-js/tree/main/packages/cli#readme",
+  "bugs": "https://github.com/carbium-sh/carbium-js/issues",
+  "keywords": [
+    "carbium",
+    "solana",
+    "cli",
+    "command-line",
+    "rpc",
+    "das",
+    "swap",
+    "webhooks"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "carbium": "./dist/bin.mjs"
+  },
+  "dependencies": {
+    "@carbium/sdk": "workspace:^",
+    "@noble/hashes": "2.4.0"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
+    "test": "pnpm build && node --test --test-concurrency=1 'test/*.test.ts'",
+    "lint": "publint --strict"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "publint": "0.3.25",
+    "tsdown": "0.23.7",
+    "typescript": "7.0.2",
+    "ws": "8.23.0"
+  }
+}

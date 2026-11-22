@@ -1,0 +1,94 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm lint
+      - run: pnpm served-count
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: packages/sdk/test/smoke/run.sh
+      - run: packages/cli/test/smoke/run.sh
+      - run: packages/cli/test/completion/run.sh
+      - run: packages/mcp/test/smoke/run.sh
+      - run: docker build -q -t carbium-mcp:ci -f packages/mcp/Dockerfile .pack && node packages/mcp/test/smoke/image.mjs carbium-mcp:ci packages/mcp/server.json
+  binaries:
+    # The Linux binaries, built and run on each architecture, and install.sh against a local mirror of a release. The
+    # macOS and Windows binaries are built and run by release.yml (run it by hand for a dry run).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, targets: linux-x64 linux-x64-musl, images: linux/amd64=debian:trixie-slim linux/amd64=alpine:3 }
+          - { runner: ubuntu-24.04-arm, targets: linux-arm64 linux-arm64-musl, images: linux/arm64=debian:trixie-slim linux/arm64=alpine:3 }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.5
+      - run: shellcheck -s sh packages/cli/install.sh scripts/build-binaries.sh packages/cli/test/binary/in-container.sh && shellcheck packages/cli/test/binary/run.sh packages/sdk/test/jsr/run.sh
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: scripts/build-binaries.sh "$RUNNER_TEMP/bin" ${{ matrix.targets }} && packages/cli/test/binary/run.sh "$RUNNER_TEMP/bin" ${{ matrix.images }}
+  jsr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - run: packages/sdk/test/jsr/run.sh
+  winget:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends python3-jsonschema python3-yaml
+      - run: python3 -I scripts/winget.py check packages/cli/winget/manifests/c/Carbium/CLI/0.1.0

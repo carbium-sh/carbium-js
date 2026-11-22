@@ -1,0 +1,8 @@
+import { CliError, EXIT, register } from '../main.ts'
+
+register([
+  { path: ['tokens', 'lookup'], summary: 'one token: name, symbol, decimals, logo, volume (keyless)', usage: '<mint>', access: 'keyless', run: async (ctx) => { const m = ctx.positionals[0]; if (!m) throw new CliError(EXIT.usage, 'usage: carbium tokens lookup <mint>'); return (await ctx.tokens().lookup(m)) ?? { mint: m, found: false } } },
+  { path: ['tokens', 'search'], summary: 'ranked search, or the top list by volume with an empty query (keyless)', usage: '[query]', access: 'keyless', options: { limit: { type: 'string', value: '<n>', help: '1 to 200 (default 20)' }, page: { type: 'string', value: '<n>', help: 'from 1' }, 'no-token22': { type: 'boolean', help: 'leave Token-2022 mints out' } }, run: async (ctx) => ctx.tokens().search(ctx.positionals[0] ?? '', { limit: Number(ctx.str('limit') ?? 20), ...(ctx.str('page') ? { page: Number(ctx.str('page')) } : {}), ...(ctx.bool('no-token22') ? { includeToken22: false } : {}) }) },
+  { path: ['tokens', 'batch'], summary: 'up to 500 mints in one call; unknown ones are queued for enrichment (keyless)', usage: '<mint...>', access: 'keyless', run: async (ctx) => { if (!ctx.positionals.length) throw new CliError(EXIT.usage, 'usage: carbium tokens batch <mint...>'); return ctx.tokens().batch(ctx.positionals) } },
+  { path: ['tokens', 'image'], summary: 'the logo URL of a mint, for an <img> (no request)', usage: '<mint>', access: 'local', run: async (ctx) => { const m = ctx.positionals[0]; if (!m) throw new CliError(EXIT.usage, 'usage: carbium tokens image <mint>'); return { url: ctx.tokens().imageUrl(m) } } },
+])

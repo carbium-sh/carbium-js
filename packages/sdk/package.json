@@ -1,0 +1,53 @@
+{
+  "name": "@carbium/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript client for Carbium's Solana services: RPC, DAS, WebSocket, Carbon Stream, quote and swap, webhooks, the account API, DCA and the token API",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "repository": { "type": "git", "url": "git+https://github.com/carbium-sh/carbium-js.git", "directory": "packages/sdk" },
+  "homepage": "https://github.com/carbium-sh/carbium-js/tree/main/packages/sdk#readme",
+  "bugs": "https://github.com/carbium-sh/carbium-js/issues",
+  "keywords": ["solana", "solana-rpc", "rpc", "das", "websocket", "yellowstone", "grpc", "geyser", "swap", "dca", "webhooks", "carbium"],
+  "engines": { "node": ">=22.12" },
+  "files": ["dist", "README.md", "LICENSE"],
+  "publishConfig": { "access": "public" },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": { "import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" }, "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" } },
+    "./webhooks": { "import": { "types": "./dist/webhooks.d.mts", "default": "./dist/webhooks.mjs" }, "require": { "types": "./dist/webhooks.d.cts", "default": "./dist/webhooks.cjs" } },
+    "./account": { "import": { "types": "./dist/account.d.mts", "default": "./dist/account.mjs" }, "require": { "types": "./dist/account.d.cts", "default": "./dist/account.cjs" } },
+    "./dca": { "import": { "types": "./dist/dca.d.mts", "default": "./dist/dca.mjs" }, "require": { "types": "./dist/dca.d.cts", "default": "./dist/dca.cjs" } },
+    "./tokens": { "import": { "types": "./dist/tokens.d.mts", "default": "./dist/tokens.mjs" }, "require": { "types": "./dist/tokens.d.cts", "default": "./dist/tokens.cjs" } },
+    "./stream": { "node": { "import": { "types": "./dist/stream.d.mts", "default": "./dist/stream.mjs" }, "require": { "types": "./dist/stream.d.cts", "default": "./dist/stream.cjs" } }, "default": { "types": "./dist/stream.d.mts", "default": "./dist/stream-unsupported.mjs" } },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@triton-one/yellowstone-grpc": ">=10.0.0 <11",
+    "ws": "^8.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@triton-one/yellowstone-grpc": { "optional": true },
+    "ws": { "optional": true }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
+    "test": "pnpm build && node --test --test-concurrency=1 --test-timeout=60000 'test/*.test.ts'",
+    "lint": "publint --strict && attw --pack . --profile node16"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "@solana/kit": "8.6.0",
+    "@solana/web3.js": "3.2.1",
+    "@triton-one/yellowstone-grpc": "10.0.0",
+    "@types/node": "22.20.5",
+    "@types/ws": "8.18.2",
+    "publint": "0.3.25",
+    "tsdown": "0.23.7",
+    "typescript": "7.0.2",
+    "ws": "8.23.0"
+  }
+}

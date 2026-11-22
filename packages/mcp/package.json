@@ -1,0 +1,36 @@
+{
+  "name": "@carbium/mcp",
+  "version": "0.1.0",
+  "mcpName": "sh.carbium/mcp",
+  "description": "MCP server for Carbium's Solana services: RPC and DAS reads, quotes and prices, unsigned swap and DCA transactions, the account API, the token API and a docs search",
+  "license": "MIT",
+  "type": "module",
+  "repository": { "type": "git", "url": "git+https://github.com/carbium-sh/carbium-js.git", "directory": "packages/mcp" },
+  "homepage": "https://github.com/carbium-sh/carbium-js/tree/main/packages/mcp#readme",
+  "bugs": "https://github.com/carbium-sh/carbium-js/issues",
+  "keywords": ["mcp", "mcp-server", "model-context-protocol", "solana", "carbium", "rpc", "das", "swap"],
+  "engines": { "node": ">=22.12" },
+  "files": ["dist", "server.json", "README.md", "LICENSE"],
+  "publishConfig": { "access": "public" },
+  "bin": { "carbium-mcp": "./dist/bin.mjs" },
+  "exports": { ".": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" }, "./package.json": "./package.json" },
+  "dependencies": {
+    "@carbium/sdk": "workspace:^",
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "4.6.7"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
+    "test": "pnpm build && node --test --test-concurrency=1 'test/*.test.ts'",
+    "lint": "publint --strict && attw --pack . --profile esm-only"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/node": "22.20.5",
+    "publint": "0.3.25",
+    "tsdown": "0.23.7",
+    "typescript": "7.0.2"
+  }
+}

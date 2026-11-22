@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.28.0.schema.json
+
+PackageIdentifier: Carbium.CLI
+PackageVersion: 0.1.0
+InstallerType: portable
+Commands:
+- carbium
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/carbium-sh/carbium-js/releases/download/cli-v0.1.0/carbium-windows-x64.exe
+  InstallerSha256: '0000000000000000000000000000000000000000000000000000000000000000'
+- Architecture: arm64
+  InstallerUrl: https://github.com/carbium-sh/carbium-js/releases/download/cli-v0.1.0/carbium-windows-arm64.exe
+  InstallerSha256: '0000000000000000000000000000000000000000000000000000000000000000'
+ManifestType: installer
+ManifestVersion: 1.28.0
