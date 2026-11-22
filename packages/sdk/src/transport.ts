@@ -66,6 +66,14 @@ interface RpcAnswer {
 const REQUEST_CODES: ReadonlySet<number> = new Set([-32600, -32601, -32602, -32700, -32012, -32015])
 const REQUEST_REASONS: ReadonlySet<string> = new Set(['PROGRAM_NOT_PROVISIONED', 'CLASSIC_SPL_SCAN', 'METHOD_NOT_SERVED', 'UNKNOWN_METHOD'])
 
+type MethodSpec = { batch: string; permit: boolean; plane: string }
+
+/** The served table's entry for a method, or a refusal before anything is sent: the services do not serve it. */
+function served(method: string): MethodSpec {
+  if (!Object.hasOwn(METHODS, method)) throw new CarbiumError({ kind: 'request', method, code: -32601, message: `${method} is not a served method` })
+  return (METHODS as unknown as Record<string, MethodSpec>)[method] as MethodSpec
+}
+
 function isRouteCode(code: number): boolean {
   return (code <= -32051 && code >= -32054) || (code <= -32060 && code >= -32099)
 }
@@ -168,8 +176,9 @@ export class JsonRpcTransport {
     this.#timeoutMs = options.timeoutMs ?? 100_000
   }
 
-  /** One call. Resolves with the result or throws a CarbiumError. */
+  /** One call. Resolves with the result or throws a CarbiumError; a method the services do not serve is refused before sending. */
   async call(method: string, params?: unknown, options: CallOptions = {}): Promise<unknown> {
+    served(method)
     const id = this.#nextId++
     const body: Record<string, unknown> = { jsonrpc: '2.0', id, method }
     if (params !== undefined) body['params'] = params
@@ -195,11 +204,10 @@ export class JsonRpcTransport {
     let permits = 0
     let das = 0
     for (const c of calls) {
-      const spec = (METHODS as unknown as Record<string, { batch: string; permit: boolean; plane: string } | undefined>)[c.method]
-      if (!spec) throw new CarbiumError({ kind: 'request', method: c.method, code: -32601, message: `${c.method} is not a served method` })
+      const spec = served(c.method)
       if (spec.batch === 'never') throw new CarbiumError({ kind: 'request', method: c.method, message: `${c.method} is not batchable: send it alone` })
-      if (spec?.permit) permits++
-      if (spec?.plane === 'das') das++
+      if (spec.permit) permits++
+      if (spec.plane === 'das') das++
     }
     if (das !== 0 && das !== calls.length) throw new CarbiumError({ kind: 'request', message: 'DAS methods batch only with other DAS methods' })
     if (permits > LIMITS.maxPermitPerBatch) throw new CarbiumError({ kind: 'request', message: `a batch holds at most ${LIMITS.maxPermitPerBatch} permit methods (getAccountInfo, getMultipleAccounts, getTransaction, ...), not ${permits}: split it` })

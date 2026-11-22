@@ -30,6 +30,30 @@ test('batch: door rules are refused locally before any request', async (t) => {
   assert.equal(s.seen.length, 0)
 })
 
+test('a method the services do not serve is refused before any request, by call() as by batch()', async (t) => {
+  const s = new PlantedServer([rpcOk(1), rpcOk(1), rpcOk(1), rpcOk(1)])
+  t.after(() => s.stop())
+  const c = createCarbium({ apiKey: KEY, endpoint: await s.start(), retry: false })
+  const caught = async (p: Promise<unknown>): Promise<CarbiumError> => {
+    try {
+      await p
+    } catch (e) {
+      assert.ok(isCarbiumError(e), 'a CarbiumError')
+      return e
+    }
+    return assert.fail('no rejection: the call was sent and answered')
+  }
+  const fields = (e: CarbiumError) => ({ kind: e.kind, method: e.method, code: e.code, message: e.message, retryable: e.retryable })
+  for (const method of ['requestAirdrop', 'toString', 'getslot']) {
+    const want = fields(await caught(c.transport.batch([{ method }])))
+    assert.deepEqual(want, { kind: 'request', method, code: -32601, message: `${method} is not a served method`, retryable: false })
+    assert.deepEqual(fields(await caught(c.transport.call(method))), want)
+    assert.deepEqual(fields(await caught((c.call as (m: string) => Promise<unknown>)(method))), want)
+  }
+  assert.equal(s.seen.length, 0)
+  assert.equal(await c.rpc.getSlot(), 1)
+})
+
 test('batch: answers come back in request order, per-element errors as { ok: false }', async (t) => {
   const s = new PlantedServer([
     (req) => {
