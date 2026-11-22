@@ -11,6 +11,8 @@ never appear in any output.
 npx -y @carbium/mcp
 ```
 
+It runs on Node 22.12 or later.
+
 ## Add it to your client
 
 The key goes in the server's environment, never in a URL. Without any key the three keyless tools work. Each client

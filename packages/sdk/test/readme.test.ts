@@ -71,3 +71,14 @@ test('every json block of the three READMEs parses', () => {
   assert.ok(json.length > 0, 'no json block found')
   for (const b of json) assert.doesNotThrow(() => JSON.parse(b.code), `packages/${b.pkg}/README.md:${b.line}`)
 })
+
+test('each README names the Node its package.json engines field asks for, and no other', () => {
+  for (const pkg of PACKAGES) {
+    const engines = (JSON.parse(readFileSync(join(SDK, '..', pkg, 'package.json'), 'utf8')) as { engines: { node: string } }).engines.node
+    assert.match(engines, /^>=\d+(\.\d+)*$/, `packages/${pkg}/package.json engines.node is ${engines}`)
+    const want = engines.slice(2)
+    const named = [...readFileSync(join(SDK, '..', pkg, 'README.md'), 'utf8').matchAll(/\bNode(?:\.js)?\s+(\d+(?:\.\d+)*)/g)].map((m) => m[1])
+    assert.ok(named.length > 0, `packages/${pkg}/README.md names no Node version; engines.node asks for ${engines}`)
+    for (const v of named) assert.equal(v, want, `packages/${pkg}/README.md says Node ${v}, engines.node asks for ${engines}`)
+  }
+})

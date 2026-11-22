@@ -100,7 +100,7 @@ jobs:
           name: package
           path: pack
       - run: |
-          if npm view "$PKG@$VER" version >/dev/null 2>&1; then echo "$PKG@$VER is on npm already"; else npm publish pack/*.tgz --access public ${NPM_TAG:+--tag "$NPM_TAG"}; fi
+          if npm view "$PKG@$VER" version >/dev/null 2>&1; then echo "$PKG@$VER is on npm already"; else npm publish ./pack/*.tgz --access public ${NPM_TAG:+--tag "$NPM_TAG"}; fi
         env:
           PKG: ${{ needs.build.outputs.npm }}
           VER: ${{ needs.build.outputs.version }}

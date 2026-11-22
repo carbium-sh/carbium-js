@@ -2,8 +2,8 @@
 
 Typed TypeScript client for Carbium's Solana services on [services.carbium.sh](https://carbium.sh): JSON-RPC (every
 served method, DAS included), WebSocket subscriptions, Carbon Stream (Yellowstone gRPC), quote and swap, the account
-API, webhook signature checks, the DCA API on the dex and the token API. No runtime dependencies. ESM and CJS. Node 22+
-and browsers (Carbon Stream is Node only).
+API, webhook signature checks, the DCA API on the dex and the token API. No runtime dependencies. ESM and CJS. Node
+22.12 or later and browsers (Carbon Stream is Node only).
 
 The SDK never holds a private key, signs or sends on its own: swap and DCA calls return one unsigned transaction for
 your own wallet to sign, and `sendTransaction` takes bytes you signed. Every method the SDK offers is served; what the

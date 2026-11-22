@@ -140,6 +140,111 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  winget-check:
+    # The winget-pkgs pull request checklist's local runs on the filled manifests, on x64 and arm64, in the dry run
+    # too: winget validate, winget install, carbium --version, winget uninstall. The release does not serve this build
+    # yet (a draft, or no release in the dry run), so install takes a copy whose InstallerUrl points at the same files
+    # on loopback; winget still checks each InstallerSha256. Not a need of the release job: it proves the manifests
+    # before the pull request, and a runner problem here never holds a release back.
+    needs: [build, winget]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: windows-latest }
+          - { arch: arm64, runner: windows-11-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: assets
+          path: bin
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: winget
+          path: manifest
+      - name: winget 1.28.190 or newer, the first client that reads ManifestVersion 1.28.0
+        # Windows PowerShell: the Appx cmdlets. windows-2025 ships winget, windows-11-arm does not; a missing or older
+        # one is replaced by winget-cli v1.29.380, each file checked against the SHA-256 Microsoft publishes with it.
+        shell: powershell
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          function Find-WinGet { $p = Get-AppxPackage Microsoft.DesktopAppInstaller | Sort-Object Version -Descending | Select-Object -First 1; if ($p) { Join-Path $p.InstallLocation winget.exe } }
+          function Get-WinGetVersion($exe) { if ($exe -and (Test-Path $exe)) { [version]((& $exe --version) -replace '^v|-.*$', '') } else { [version]'0.0' } }
+          $need = [version]'1.28.190'
+          $exe = Find-WinGet
+          if ((Get-WinGetVersion $exe) -lt $need) {
+            $base = 'https://github.com/microsoft/winget-cli/releases/download/v1.29.380'
+            $pins = [ordered]@{
+              'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle' = '65DEA9C01CE08EE7B763366B27C0E651F97DB857C11CA9B9C301826C10092F2E'
+              'DesktopAppInstaller_Dependencies.zip' = 'BA875AFE9D190F61218985AC0292A99D1DB710BF93E13C68944CA9D89F0D82D1'
+            }
+            foreach ($f in $pins.Keys) {
+              curl.exe -fsSL --retry 3 -o "$env:RUNNER_TEMP\$f" "$base/$f"
+              if ($LASTEXITCODE) { throw "download of $f failed" }
+              if ((Get-FileHash "$env:RUNNER_TEMP\$f" -Algorithm SHA256).Hash -ne $pins[$f]) { throw "$f does not match its pinned SHA-256" }
+            }
+            Expand-Archive "$env:RUNNER_TEMP\DesktopAppInstaller_Dependencies.zip" "$env:RUNNER_TEMP\deps"
+            $deps = (Get-ChildItem "$env:RUNNER_TEMP\deps" -Recurse -Filter "*_$env:ARCH.appx").FullName
+            if (-not $deps) { throw "no $env:ARCH dependencies in DesktopAppInstaller_Dependencies.zip" }
+            Add-AppxPackage -Path "$env:RUNNER_TEMP\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -DependencyPath $deps -ForceApplicationShutdown
+            $exe = Find-WinGet
+          }
+          $v = Get-WinGetVersion $exe
+          if ($v -lt $need) { throw "winget $v is older than $need" }
+          "winget $v at $exe"
+          "WINGET=$exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: winget validate
+        shell: pwsh
+        run: |
+          & $env:WINGET validate --manifest manifest --disable-interactivity
+          if ($LASTEXITCODE) { throw "winget validate exited $LASTEXITCODE; -1978335192 (0x8A150028) is warnings, -1978335191 (0x8A150029) errors" }
+      - name: winget install, carbium --version, winget uninstall
+        shell: pwsh
+        env:
+          ARCH: ${{ matrix.arch }}
+          WANT: ${{ needs.build.outputs.version }}
+        run: |
+          # install --manifest needs LocalManifestFiles, which only an administrator can turn on, as runner shells are
+          & $env:WINGET settings --enable LocalManifestFiles
+          if ($LASTEXITCODE) { throw "enabling LocalManifestFiles exited $LASTEXITCODE" }
+          $local = New-Item -ItemType Directory "$env:RUNNER_TEMP\manifest-loopback"
+          foreach ($f in Get-ChildItem manifest -Filter *.yaml) {
+            (Get-Content -Raw $f.FullName) -creplace '(?m)^(\s*InstallerUrl:\s*)\S*/', '${1}http://127.0.0.1:8765/' | Set-Content -NoNewline (Join-Path $local $f.Name)
+          }
+          if ((Select-String -CaseSensitive -Path "$local\*.yaml" -Pattern '^\s*InstallerUrl: http://127\.0\.0\.1:8765/carbium-windows-(x64|arm64)\.exe$').Count -ne 2) { throw 'the InstallerUrl rewrite missed an installer' }
+          $server = Start-Process python -ArgumentList '-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', (Resolve-Path bin) -PassThru -NoNewWindow
+          try {
+            foreach ($i in 1..30) { try { Invoke-WebRequest http://127.0.0.1:8765/SHA256SUMS | Out-Null; break } catch { Start-Sleep 1 } }
+            & $env:WINGET install --manifest $local --accept-package-agreements --accept-source-agreements --disable-interactivity --silent
+            if ($LASTEXITCODE) { throw "winget install exited $LASTEXITCODE" }
+          } finally { Stop-Process -Id $server.Id -Force }
+          $arp = @(Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' | Where-Object WinGetPackageIdentifier -eq 'Carbium.CLI')
+          if ($arp.Count -ne 1) { throw "want one Carbium.CLI uninstall entry, found $($arp.Count)" }
+          $arp = $arp[0]
+          # the version alone would pass an x64 exe run under emulation on arm64: the installed file must be this arch's
+          $want = ((Get-Content bin/SHA256SUMS) -match "  carbium-windows-$env:ARCH\.exe$" -split ' ')[0]
+          if ((Get-FileHash $arp.TargetFullPath -Algorithm SHA256).Hash -ne $want) { throw "$($arp.TargetFullPath) is not carbium-windows-$env:ARCH.exe" }
+          if ($arp.SymlinkFullPath -ne "$env:LOCALAPPDATA\Microsoft\WinGet\Links\carbium.exe") { throw "the alias is $($arp.SymlinkFullPath)" }
+          $alias = (& $arp.SymlinkFullPath --version | Out-String).Trim()
+          # winget adds Links to the user PATH for new shells only; read it back as a new shell would
+          $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+          $got = (carbium --version | Out-String).Trim()
+          if ($alias -ne $env:WANT -or $got -ne $env:WANT) { throw "carbium --version printed '$alias' through the alias and '$got' on PATH, want '$env:WANT'" }
+          "carbium --version: $got"
+          & $env:WINGET uninstall --product-code $arp.PSChildName --exact --silent --accept-source-agreements --disable-interactivity
+          if ($LASTEXITCODE) { throw "winget uninstall exited $LASTEXITCODE" }
+          foreach ($p in $arp.SymlinkFullPath, $arp.TargetFullPath, "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$($arp.PSChildName)") {
+            if (Test-Path $p) { throw "uninstall left $p" }
+          }
+      - if: failure()
+        shell: pwsh
+        run: Get-ChildItem "$env:LOCALAPPDATA\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\DiagOutputDir" -Filter *.log -ErrorAction SilentlyContinue | Get-Content -Tail 200
+
   release:
     if: github.event_name == 'push'
     needs: [smoke, winget]
