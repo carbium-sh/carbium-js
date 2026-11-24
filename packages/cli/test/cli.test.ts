@@ -789,7 +789,11 @@ test("doctor shows npm's latest version after its own: null when npm gives none,
   const fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     asked.push(String(url))
     if (!String(url).startsWith('https://registry.npmjs.org/')) return Response.json({ jsonrpc: '2.0', id: 1, result: 'ok' })
-    if (latest === 'no answer') return new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('given up'))))
+    if (latest === 'no answer') {
+      // A real request keeps the process alive while it waits; this timer stands in for that, since the 3 s signal alone does not.
+      const held = setTimeout(() => undefined, 10_000)
+      return new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => { clearTimeout(held); reject(new Error('given up')) }))
+    }
     return Response.json({ latest })
   }
   const doctor = async (env: Record<string, string> = {}): Promise<Record<string, unknown>> => {
