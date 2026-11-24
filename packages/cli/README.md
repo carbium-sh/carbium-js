@@ -28,6 +28,25 @@ version. In GitHub Actions: `uses: carbium-sh/setup-carbium@v1`. The binaries an
 not yet signed by a publisher, so a browser download may meet a Windows or macOS warning. Alpine needs
 `apk add libstdc++ libgcc`. Carbon Stream is not in the binaries: it needs the npm package.
 
+## Update
+
+On a terminal, `carbium` prints one line on stderr, at most once a day, when npm has a newer version. It is one keyless
+read of npm's public registry a day, started with a command's first call to the network; that command waits up to a
+second and a half for it after printing its own answer. It never runs in CI, in a pipe, or with `--json` or `--quiet`.
+`carbium doctor` shows the latest version beside its own, and asks npm each time it runs.
+`CARBIUM_NO_UPDATE_NOTIFIER=1` turns both off.
+
+| Installed with | Update with |
+|---|---|
+| npm | `npm install -g carbium@latest` |
+| the install script | the same line again |
+| Homebrew | `brew upgrade carbium` |
+| Scoop | `scoop update carbium` |
+| GitHub Actions | nothing: `carbium-sh/setup-carbium@v1` installs the latest at each run |
+
+Homebrew and Scoop follow npm within a day. Each version's notes are at
+https://github.com/carbium-sh/carbium-js/releases.
+
 ## Quick start
 
 ```sh

@@ -97,7 +97,7 @@ const rpcCommands: Command[] = [
   },
   { path: ['das', 'list'], summary: 'the served DAS methods (offline)', access: 'local', run: async () => DAS_METHODS },
   {
-    path: ['quote'], summary: 'a swap quote: amount in base units of the source mint (--rest: the REST form, GET /cq1/quote)', usage: '<src_mint> <dst_mint> <amount_in>', access: 'service',
+    path: ['quote'], summary: 'a swap quote: amount in base units of the source mint (--rest: the old path, GET /cq1/quote)', usage: '<src_mint> <dst_mint> <amount_in>', access: 'service',
     options: { 'slippage-bps': { type: 'string', value: '<n>', help: 'slippage in basis points (default 50)' }, dex: { type: 'string', value: '<labels>', help: 'pin venue families, comma separated' }, 'tx-version': { type: 'string', value: '0|1', help: 'v0 with lookup tables (default) or v1' }, rest: { type: 'boolean', help: 'ask GET /cq1/quote instead: one plain object, every value a string; takes no --dex or --tx-version' } },
     run: async (ctx) => {
       const [src, dst, amount] = ctx.positionals
@@ -105,7 +105,7 @@ const rpcCommands: Command[] = [
       const dex = ctx.str('dex')
       const txv = ctx.str('tx-version')
       if (ctx.bool('rest')) {
-        if (dex || txv) throw new CliError(EXIT.usage, 'the REST quote takes only the pair, the amount and --slippage-bps; drop --dex and --tx-version, or drop --rest')
+        if (dex || txv) throw new CliError(EXIT.usage, 'the old path takes only the pair, the amount and --slippage-bps; drop --dex and --tx-version, or drop --rest')
         return ctx.carbium().cq1Quote({ src_mint: src, dst_mint: dst, amount_in: amount, slippage_bps: Number(ctx.str('slippage-bps') ?? 50) })
       }
       return ctx.carbium().quote.quote({ src_mint: src, dst_mint: dst, amount_in: amount, slippage_bps: Number(ctx.str('slippage-bps') ?? 50), ...(dex ? { dex: dex.split(',') } : {}), ...(txv ? { txVersion: Number(txv) as 0 | 1 } : {}) })

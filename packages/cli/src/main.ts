@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { createCarbium, CarbiumAccount, CarbiumDca, CarbiumTokens, isCarbiumError, redactSecrets, type Carbium, type SessionOptions, type AccountApiKey } from '@carbium/sdk'
 import { Store, type Profile } from './config.ts'
+import { updateCheck } from './update.ts'
 import { VERSION } from './version.ts'
 
 export interface Io {
@@ -318,7 +319,16 @@ export async function main(argv: string[], ioIn: Partial<Io> = {}): Promise<numb
     }
     secrets.add(fileKey)
   }
-  const fetchOpt = io.fetch ? { fetch: io.fetch } : {}
+  // The version check starts with a command's first HTTP call, so a command that never reaches the network never starts
+  // it; doctor (local) reads the latest version itself.
+  let notice: (() => Promise<void>) | undefined
+  const send = io.fetch ?? fetch
+  const fetchOpt = {
+    fetch: ((...args: Parameters<typeof fetch>) => {
+      if (cmd.access !== 'local') notice ??= updateCheck(io, flags, store.dir)
+      return send(...args)
+    }) as typeof fetch,
+  }
   let selfCache: Promise<AccountApiKey> | undefined
 
   const ctx: Ctx = {
@@ -389,6 +399,8 @@ export async function main(argv: string[], ioIn: Partial<Io> = {}): Promise<numb
     return EXIT.ok
   } catch (e) {
     return report(e, ctx)
+  } finally {
+    await notice?.()
   }
 }
 
@@ -418,7 +430,7 @@ function report(e: unknown, ctx: Ctx): number {
 
 const HINTS: ReadonlyArray<[RegExp, string]> = [
   [/unknown api key/i, 'send the full key: carbium login, or carbium keys save <name>'],
-  [/not enabled for (grpc|websocket|rpc|quote)/i, 'add the scope to the key: carbium keys scope <id> rpc,ws,grpc,quote (needs writes on)'],
+  [/not enabled for (grpc|websocket|rpc|quote|das)/i, 'add the scope to the key: carbium keys scope <id> rpc,ws,grpc,quote,das (needs writes on)'],
   [/not included in this tier/i, 'Carbon Stream needs DEV, BUSINESS or PRO; on FREE use carbium ws tail'],
   [/heavy streams are not included/i, 'use --accounts instead of --owners, or upgrade to BUSINESS'],
   [/credits exhausted/i, 'buy a plan or upgrade on carbium.sh; do not loop'],

@@ -33,7 +33,7 @@ function runner(base: string, dir: string): Runner {
     new Promise((resolve, reject) => {
       const flags = defaults.filter(([f]) => !args.some((a) => a === f || a.startsWith(`${f}=`))).flat()
       const t0 = Date.now()
-      const child = spawn(RUNTIME, [BIN, ...args, ...flags], { env: { PATH: process.env['PATH'] ?? '', HOME: dir, XDG_CONFIG_HOME: join(dir, 'cfg'), ...env }, stdio: ['pipe', 'pipe', 'pipe'] })
+      const child = spawn(RUNTIME, [BIN, ...args, ...flags], { env: { PATH: process.env['PATH'] ?? '', HOME: dir, XDG_CONFIG_HOME: join(dir, 'cfg'), CARBIUM_NO_UPDATE_NOTIFIER: '1', ...env }, stdio: ['pipe', 'pipe', 'pipe'] })
       let stdout = ''
       let stderr = ''
       let killed = false
@@ -122,7 +122,7 @@ test('the command table: no command signs or sends; every command has a summary 
 
 test('version, help, lists, and a key on the command line is refused', async (t) => {
   const { door: d, run } = await door(t)
-  assert.equal((await run(['--version'])).stdout.trim(), '0.1.0')
+  assert.equal((await run(['--version'])).stdout.trim(), '0.1.1')
   assert.equal((await run(['--help'])).status, 0)
   const groupHelp = await run(['tokens', '--help'])
   assert.equal(groupHelp.status, 0, 'a group with --help is a help request') // it exited 2
@@ -685,4 +685,135 @@ test('Ctrl-C at a hidden prompt exits 130 and lets go of stdin (it stayed flowin
   stdin.write('\u0003')
   assert.equal(await done, 130)
   assert.equal(stdin.isPaused(), true)
+})
+
+test('on a terminal a newer carbium on npm is named in one stderr line, once a day; silent in CI, in a pipe, with --json or --quiet, or turned off', { timeout: 30_000 }, async (t) => {
+  const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+  const LINE = `carbium 9.9.9 is out (this is ${version}). To update: https://github.com/carbium-sh/carbium-js/tree/main/packages/cli#update (CARBIUM_NO_UPDATE_NOTIFIER=1 turns this line off)\n`
+  const asked: Array<RequestInit | undefined> = []
+  const stamped: boolean[] = []
+  let current = ''
+  // The registry answers 50 ms after it is asked, as npm does long after the command's own call is back.
+  let registry: () => Promise<Response> = async () => Response.json({ latest: '9.9.9' })
+  const fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    if (String(url) === 'https://registry.npmjs.org/-/package/carbium/dist-tags') {
+      asked.push(init)
+      stamped.push(existsSync(join(current, 'update-check')))
+      await new Promise((r) => setTimeout(r, 50))
+      return registry()
+    }
+    const call = JSON.parse(String(init?.body)) as { id: number; method: string }
+    return Response.json({ jsonrpc: '2.0', id: call.id, ...(call.method === 'getHealth' ? { result: 'ok' } : { error: { code: -32602, message: 'planted refusal' } }) })
+  }
+  const run = async (dir: string, args: string[] = [], env: Record<string, string> = {}, io: { stdoutIsTTY?: boolean; stderrIsTTY?: boolean } = {}): Promise<{ code: number; out: string; err: string }> => {
+    let out = ''
+    let err = ''
+    current = dir
+    const code = await main(['rpc', 'getHealth', ...args], { stdout: (s) => void (out += s), stderr: (s) => void (err += s), env: { CARBIUM_KEY: SERVICE, CARBIUM_CONFIG_DIR: dir, ...env }, fetch, stdoutIsTTY: true, stderrIsTTY: true, ...io })
+    return { code, out, err }
+  }
+  const fresh = (): string => join(home(), 'not-made-yet')
+
+  const off = await run(fresh(), [], { CARBIUM_NO_UPDATE_NOTIFIER: '1' })
+  assert.deepEqual([off.code, off.err, asked.length], [0, '', 0])
+  const dir = fresh()
+  assert.deepEqual(await run(dir), { code: 0, out: off.out, err: LINE }, 'one line on stderr; stdout and the exit code are as without it')
+  assert.deepEqual(asked.map((init) => Object.keys(init ?? {})), [['signal']], 'one keyless read: no header and no body')
+  assert.equal(statSync(dir).mode & 0o777, 0o700)
+  assert.deepEqual([(await run(dir)).err, asked.length], ['', 1], 'not again the same day')
+  const now = Date.now()
+  t.mock.timers.enable({ apis: ['Date'], now: now + 23 * 3_600_000 })
+  try {
+    assert.deepEqual([(await run(dir)).err, asked.length], ['', 1], 'nor 23 hours later')
+    t.mock.timers.setTime(now + 25 * 3_600_000)
+    assert.deepEqual([(await run(dir)).err, asked.length], [LINE, 2], 'again a day later')
+    t.mock.timers.setTime(now)
+    assert.deepEqual([(await run(dir)).err, asked.length], [LINE, 3], 'a stamp from the future counts as due')
+  } finally {
+    t.mock.timers.reset()
+  }
+
+  const silent: Array<[string[], Record<string, string>, { stdoutIsTTY?: boolean; stderrIsTTY?: boolean }]> = [[['--json'], {}, {}], [['--quiet'], {}, {}], [[], { CI: 'true' }, {}], [[], { NO_UPDATE_NOTIFIER: '1' }, {}], [[], {}, { stdoutIsTTY: false }], [[], {}, { stderrIsTTY: false }]]
+  for (const [args, env, io] of silent) {
+    const d = fresh()
+    const r = await run(d, args, env, io)
+    assert.deepEqual([r.code, r.err, asked.length, existsSync(d)], [0, '', 3, false], JSON.stringify([args, env, io]))
+  }
+  const local = fresh()
+  assert.equal(await main(['endpoints'], { stdout: () => undefined, stderr: () => undefined, env: { CARBIUM_CONFIG_DIR: local }, fetch, stdoutIsTTY: true, stderrIsTTY: true }), 0)
+  assert.deepEqual([asked.length, existsSync(local)], [3, false], 'a command that never calls the network does not start the read')
+  const keyless = fresh()
+  assert.notEqual(await main(['rpc', 'getHealth'], { stdout: () => undefined, stderr: () => undefined, env: { CARBIUM_CONFIG_DIR: keyless }, fetch, stdoutIsTTY: true, stderrIsTTY: true }), 0)
+  assert.deepEqual([asked.length, existsSync(keyless)], [3, false], 'nor does a command that stops before its first call, here for want of a key')
+  const file = join(home(), 'a-file')
+  writeFileSync(file, '')
+  assert.deepEqual([(await run(join(file, 'under-a-file'))).err, asked.length], ['', 3], 'with nowhere to keep the day there is no check')
+
+  let err = ''
+  current = fresh()
+  const failed = await main(['rpc', 'getSlot'], { stdout: () => undefined, stderr: (s) => void (err += s), env: { CARBIUM_KEY: SERVICE, CARBIUM_CONFIG_DIR: current }, fetch, stdoutIsTTY: true, stderrIsTTY: true })
+  assert.notEqual(failed, 0)
+  assert.match(err, /planted refusal/)
+  assert.ok(err.endsWith(LINE), 'a failed command keeps its error and its exit code; the line comes last')
+
+  let reads = asked.length
+  for (const body of [JSON.stringify({ latest: version }), '{"latest":"0.0.1"}', '{"latest":"9.9.9\\u001b[2J"}', '{"latest":"v9.9.9"}', '{"latest":9}', '{}', 'not json']) {
+    registry = async () => new Response(body)
+    const d = fresh()
+    assert.deepEqual([(await run(d)).err, asked.length], ['', ++reads], `${body}: not a newer plain version, so no line`)
+    assert.deepEqual([(await run(d)).err, asked.length], ['', reads], `${body}: and not asked again that day`)
+  }
+
+  assert.deepEqual(stamped.filter((s) => !s), [], 'the day is stamped before every read')
+  let cut = false
+  registry = () => new Promise((_resolve, reject) => {
+    const signal = asked.at(-1)?.signal
+    const stop = (): void => { cut = true; reject(new Error('given up')) }
+    if (signal?.aborted) stop()
+    else signal?.addEventListener('abort', stop)
+  })
+  const d = fresh()
+  const t0 = Date.now()
+  const hung = await run(d)
+  const waited = Date.now() - t0
+  assert.deepEqual([hung.code, hung.out, hung.err, cut], [0, off.out, '', true], 'a registry that does not answer is given up')
+  assert.ok(waited >= 1400 && waited < 3000, `after a second and a half, not ${waited} ms`)
+  const t1 = Date.now()
+  assert.deepEqual([(await run(d)).err, asked.length], ['', reads + 1], 'and it is not asked again that day')
+  assert.ok(Date.now() - t1 < 1000)
+})
+
+test("doctor shows npm's latest version after its own: null when npm gives none, and no read when the check is turned off", async () => {
+  const asked: string[] = []
+  let latest: unknown = '9.9.9'
+  const fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    asked.push(String(url))
+    if (!String(url).startsWith('https://registry.npmjs.org/')) return Response.json({ jsonrpc: '2.0', id: 1, result: 'ok' })
+    if (latest === 'no answer') return new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('given up'))))
+    return Response.json({ latest })
+  }
+  const doctor = async (env: Record<string, string> = {}): Promise<Record<string, unknown>> => {
+    let out = ''
+    assert.equal(await main(['doctor', '--json'], { stdout: (s) => void (out += s), stderr: () => undefined, env: { CARBIUM_CONFIG_DIR: home(), ...env }, fetch }), 0)
+    return JSON.parse(out) as Record<string, unknown>
+  }
+  const shown = await doctor()
+  assert.deepEqual([Object.keys(shown).slice(0, 2), shown['latest']], [['version', 'latest'], '9.9.9'])
+  latest = 'v9'
+  assert.equal((await doctor())['latest'], null)
+  latest = 'no answer'
+  const t0 = Date.now()
+  assert.equal((await doctor())['latest'], null)
+  assert.ok(Date.now() - t0 >= 2900 && Date.now() - t0 < 6000, 'doctor gives npm three seconds')
+  latest = '9.9.9'
+  const before = asked.filter((u) => u.includes('npmjs')).length
+  assert.equal('latest' in (await doctor({ CARBIUM_NO_UPDATE_NOTIFIER: '1' })), false)
+  assert.equal(asked.filter((u) => u.includes('npmjs')).length, before)
+})
+
+test('the built command in a pipe makes no version check: it leaves no stamp', async (t) => {
+  const { run, dir } = await door(t)
+  const r = await run(['rpc', 'getHealth'], { ...ENV, CARBIUM_NO_UPDATE_NOTIFIER: '' })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(existsSync(join(dir, 'cfg', 'carbium', 'update-check')), false)
 })

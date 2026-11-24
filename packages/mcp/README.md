@@ -11,7 +11,8 @@ never appear in any output.
 npx -y @carbium/mcp
 ```
 
-It runs on Node 22.12 or later.
+It runs on Node 22.12 or later. `npx -y @carbium/mcp` takes the newest version at each start; a container runs the tag
+it names, so change the tag to update. Each version's notes are at https://github.com/carbium-sh/carbium-js/releases.
 
 ## Add it to your client
 

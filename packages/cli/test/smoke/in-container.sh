@@ -8,7 +8,7 @@ if command -v bun >/dev/null 2>&1; then
   RT="bun $(bun --version)"
   # the CLI's @carbium/sdk dependency resolves to the packed SDK, not the registry
   printf '{"name":"smoke","private":true,"overrides":{"@carbium/sdk":"file:%s"}}\n' /pkg/carbium-sdk-*.tgz >package.json
-  bun add /pkg/carbium-sdk-*.tgz /pkg/carbium-0.1.0.tgz
+  bun add /pkg/carbium-sdk-*.tgz /pkg/carbium-0.1.1.tgz
   CLI="bun $PWD/node_modules/carbium/dist/bin.mjs"
   JS=bun
 else
@@ -22,9 +22,9 @@ echo "$RT"
 export HOME="$PWD/home" XDG_CONFIG_HOME="$PWD/home/cfg"
 mkdir -p "$HOME"
 echo "--- tarball contents"
-tar -tzf /pkg/carbium-0.1.0.tgz | sort | tee files.txt | head -20
+tar -tzf /pkg/carbium-0.1.1.tgz | sort | tee files.txt | head -20
 if grep -vE '^package/(dist/|README\.md$|LICENSE$|package\.json$)' files.txt; then echo "unexpected file in the tarball"; exit 1; fi
-test "$($CLI --version)" = "0.1.0"
+test "$($CLI --version)" = "0.1.1"
 echo "--- README quick start, the keyless lines, against the live hosts"
 $CLI tokens lookup So11111111111111111111111111111111111111112 | head -4
 $CLI plans --json | head -c 120; echo

@@ -1,4 +1,5 @@
 import { CliError, EXIT, allCommands, register, type Command } from '../main.ts'
+import { checkOff, latest } from '../update.ts'
 import { VERSION } from '../version.ts'
 
 const CONFIG_KEYS = ['endpoint', 'dashboard', 'dcaUrl', 'tokensUrl', 'streamUrl', 'writes', 'defaultServiceKey'] as const
@@ -92,7 +93,7 @@ register([
   {
     path: ['doctor'], summary: 'check the config and reach each host; shows which keys are present (prefixes only)', access: 'local',
     run: async (ctx) => {
-      const report: Record<string, unknown> = { version: VERSION, node: process.version, configFile: ctx.store.file, profile: ctx.flags.profile, writes: Boolean(ctx.profile.writes || ctx.flags.allowWrites) }
+      const report: Record<string, unknown> = { version: VERSION, ...(checkOff(ctx.io.env) ? {} : { latest: (await latest(ctx.io.fetch ?? fetch, AbortSignal.timeout(3000))) ?? null }), node: process.version, configFile: ctx.store.file, profile: ctx.flags.profile, writes: Boolean(ctx.profile.writes || ctx.flags.allowWrites) }
       let serviceKey: string | undefined
       try {
         serviceKey = ctx.serviceKey()
