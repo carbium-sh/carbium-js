@@ -41,7 +41,7 @@ export interface SocketOptions {
   carrier?: 'subprotocol' | 'header'
   /** Called after every reconnect, once every live subscription is bound again; gap is true after close 1012 stream_gap_reseed_required. Re-read state you may have missed. */
   onReseed?: (info: CloseInfo & { gap: boolean }) => void
-  /** Called once when the socket gives up: a key refusal, a second credits_exhausted, or three refused handshakes. */
+  /** Called once when the socket gives up: a key refusal, a second credits_exhausted, or five failed handshakes in a row with no status. */
   onFatal?: (error: CarbiumError) => void
   /** A subscription the server refused when it was bound again after a reconnect. */
   onError?: (error: CarbiumError) => void

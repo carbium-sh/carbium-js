@@ -1,6 +1,6 @@
 {
   "name": "@carbium/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TypeScript client for Carbium's Solana services: RPC, DAS, WebSocket, Carbon Stream, quote and swap, webhooks, the account API, DCA and the token API",
   "license": "MIT",
   "type": "module",

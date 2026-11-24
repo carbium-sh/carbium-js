@@ -54,6 +54,19 @@ test('a method the services do not serve is refused before any request, by call(
   assert.equal(await c.rpc.getSlot(), 1)
 })
 
+test('quote sends the account cap and the integrator fee, types integratorFee, and a 200 -32055 is a route error sent once', async (t) => {
+  const fee = { amount: '25000', feeBps: 25, mint: 'So11111111111111111111111111111111111111112', account: 'treasury' }
+  const s = new PlantedServer([rpcOk({ quoteId: 'q', integratorFee: fee }), rpcErr(200, -32055, 'no route fits the account cap', { reason: 'direct_declined', why: 'accounts_over_cap' })])
+  t.after(() => s.stop())
+  const c = createCarbium({ apiKey: KEY, endpoint: await s.start() })
+  const ask = { src_mint: 'a', dst_mint: 'b', amount_in: '1', slippage_bps: 50, maxAccounts: 8, integrator_fee_bps: 25, integrator_fee_account: 'treasury' }
+  const quote = await c.quote.quote(ask)
+  assert.equal(quote.integratorFee?.feeBps, 25)
+  assert.deepEqual((JSON.parse(s.seen[0]!.body) as { params: unknown }).params, ask)
+  await assert.rejects(c.quote.quote(ask), isKind('route', (e) => e.code === -32055 && e.retryable === false))
+  assert.equal(s.seen.length, 2)
+})
+
 test('batch: answers come back in request order, per-element errors as { ok: false }', async (t) => {
   const s = new PlantedServer([
     (req) => {

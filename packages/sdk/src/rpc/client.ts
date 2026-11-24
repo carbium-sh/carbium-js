@@ -39,7 +39,7 @@ export interface Carbium {
   batch<const C extends readonly TypedCall[]>(calls: C, options?: CallOptions): Promise<{ [I in keyof C]: C[I] extends TypedCall<infer M> ? BatchResult<ResultOf<M>> : never }>
   /** A WebSocket subscription client on the same key and host. */
   socket(options?: SocketOptions): CarbiumSocket
-  /** GET /cq1/quote, the REST form of the quote: one plain object back, every value a string. */
+  /** @deprecated GET /cq1/quote is the old quote path, kept for callers already on it: use quote.quote. */
   cq1Quote(params: Cq1QuoteParams, options?: CallOptions): Promise<Cq1Quote>
 }
 

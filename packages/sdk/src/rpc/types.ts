@@ -510,6 +510,12 @@ export interface QuoteParams {
   dexes?: string | string[]
   txVersion?: 0 | 1
   swapTag?: 0 | 1
+  /** The most accounts the swap instruction may carry, repeats counted, 1 to 64; a quote with no route under it answers -32055. */
+  maxAccounts?: number
+  /** Your own fee in basis points, 0 to 5000, taken in the router fee's token and side (integratorFee.mint names it); sent together with integrator_fee_account. */
+  integrator_fee_bps?: number | string
+  /** The wallet that receives the fee: a wallet address, not a token account. A token fee goes to the wallet's associated token account for integratorFee.mint, which must already exist; a fee that cannot be paid is skipped and the swap still lands. */
+  integrator_fee_account?: Base58
 }
 export interface RouteLeg {
   hop: number
@@ -527,6 +533,8 @@ export interface Quote {
   routePlan: RouteLeg[]
   quoteId: string
   platformFee?: { amount: string; feeBps: number; mint: Base58 }
+  /** Present when an integrator fee above 0 was asked, in the token mint names; destAmountOut and minAmountOut are what the trader receives after it. */
+  integratorFee?: { amount: string; feeBps: number; mint: Base58; account: Base58 }
   txVersion?: 1
   swapTag?: 1
   partial?: true

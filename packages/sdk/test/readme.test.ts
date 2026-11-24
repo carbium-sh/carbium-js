@@ -15,7 +15,7 @@ const C = `import type { Carbium, ResultOf } from '@carbium/sdk'; declare const 
 const DECLARES: Record<string, string> = {
   "import { createCarbium, isCarbiumError } from '@carbium/sdk'": '',
   'const carbium = createCarbium({ apiKey })': `import { createCarbium } from '@carbium/sdk'; declare const apiKey: string, a: string, b: string, mint: string, owner: string`,
-  "const q = await carbium.cq1Quote({ src_mint: SOL, dst_mint: USDC, amount_in: '100000000', slippage_bps: 50 })": `${C}; declare const SOL: string, USDC: string`,
+  "const capped = await carbium.quote.quote({ src_mint: SOL, dst_mint: USDC, amount_in: '100000000', slippage_bps: 50, maxAccounts: 32, integrator_fee_bps: 25, integrator_fee_account: treasury })": `${C}; declare const SOL: string, USDC: string, treasury: string`,
   "const quote = await carbium.quote.quote({ src_mint: SOL, dst_mint: USDC, amount_in: '100000000', slippage_bps: 50 })": `${C}; import type { KeyPairSigner } from '@solana/kit'; declare const SOL: string, USDC: string, wallet: KeyPairSigner`,
   "import { getBase64Encoder, getTransactionDecoder, signTransaction, getBase64EncodedWireTransaction } from '@solana/kit'": `${C}; import type { generateKeyPair } from '@solana/kit'; declare const swap: ResultOf<'swap'>, keyPair: Awaited<ReturnType<typeof generateKeyPair>>`,
   "import { VersionedTransaction } from '@solana/web3.js'": `${C}; import type { Keypair } from '@solana/web3.js'; declare const swap: ResultOf<'swap'>, keypair: Keypair`,

@@ -4,7 +4,7 @@ import { METHODS } from './rpc/methods.gen.ts'
 import type { Cq1Quote, Cq1QuoteParams } from './rpc/types.ts'
 import { VERSION } from './version.ts'
 
-/** Wire limits of the services.carbium.sh door, checked locally before a request is sent. */
+/** Wire limits of the services.carbium.sh door. bodyMaxBytes, maxBatch and maxPermitPerBatch are checked locally before a request is sent; the rest are the service's own caps. */
 export const LIMITS = {
   /** Largest request body in bytes; a bigger one is refused with 413. */
   bodyMaxBytes: 51200,
@@ -75,7 +75,7 @@ function served(method: string): MethodSpec {
 }
 
 function isRouteCode(code: number): boolean {
-  return (code <= -32051 && code >= -32054) || (code <= -32060 && code >= -32099)
+  return code <= -32051 && code >= -32099
 }
 
 function kindOf(status: number, code: number | null, reason: string | undefined): CarbiumErrorKind {
@@ -236,8 +236,10 @@ export class JsonRpcTransport {
   }
 
   /**
-   * GET /cq1/quote, the REST form of the quote: the same scope, plan, rate and 0 credits as the JSON-RPC quote, one
-   * plain JSON object back with every value a string. The key goes in x-api-key, never in the query.
+   * GET /cq1/quote, the old quote path, kept for callers already on it: the same scope, plan, rate and 0 credits as
+   * the JSON-RPC quote, one plain JSON object back with every value a string. The key goes in x-api-key, never in the
+   * query.
+   * @deprecated Use the quote method (quote.quote).
    */
   async cq1Quote(params: Cq1QuoteParams, options: CallOptions = {}): Promise<Cq1Quote> {
     const query = new URLSearchParams({ src_mint: params.src_mint, dst_mint: params.dst_mint, amount_in: String(params.amount_in), slippage_bps: String(params.slippage_bps) })

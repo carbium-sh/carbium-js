@@ -15,7 +15,7 @@ export type CarbiumErrorKind =
   | 'upstream'
   /** HTTP 200 with an error from the node, the index or the DAS store (agave codes, -32021..-32026, ...). */
   | 'node'
-  /** Quote and swap plane: no route, unknown venue, reserves, pool state, expired quote (-32051..-32054, -32060..-32099). */
+  /** Quote and swap plane at HTTP 200: no route, no live pool, reserves, pool state, account cap (-32051..-32099). At HTTP 400 (an unknown venue, an unknown or expired quote_id) the kind is 'request'. */
   | 'route'
   /** No HTTP answer at all: network error, timeout or abort. */
   | 'transport'

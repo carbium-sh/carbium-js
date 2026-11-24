@@ -13,7 +13,8 @@ services do not serve is not here.
 npm install @carbium/sdk
 ```
 
-Deno: `deno add jsr:@carbium/sdk`.
+Deno: `deno add jsr:@carbium/sdk`. To update: `npm install @carbium/sdk@latest`; each version's notes are at
+https://github.com/carbium-sh/carbium-js/releases.
 
 ## Quick start
 
@@ -64,12 +65,8 @@ Token scans (`getTokenAccountsByOwner`, `getTokenAccountsByDelegate`) are billed
 `limit` 1000. Name a mint, keep `limit` small, and read the method notes at https://carbium.sh/skill.md before running
 one in a loop.
 
-The quote also has a REST form, GET /cq1/quote, with the same key, scope, plan and rate:
-
-```ts
-const q = await carbium.cq1Quote({ src_mint: SOL, dst_mint: USDC, amount_in: '100000000', slippage_bps: 50 })
-// one plain object, every value a string: q.destAmountOut, q.destAmountOutMin, q.priceImpactPct, q.routePlan
-```
+`GET /cq1/quote` is the old quote path, kept for callers already on it (`carbium.cq1Quote`, deprecated); new code
+uses `quote`.
 
 ### Swap: quote, build, sign with your own wallet, send
 
@@ -80,6 +77,17 @@ const quote = await carbium.quote.quote({ src_mint: SOL, dst_mint: USDC, amount_
 const swap = await carbium.quote.swap({ quote_id: quote.quoteId, user_pubkey: wallet.address })
 // swap.transaction is one unsigned v0 transaction, base64; your wallet is its only signer.
 ```
+
+A quote also takes a cap on the accounts the swap instruction may carry and your own integrator fee:
+
+```ts
+const capped = await carbium.quote.quote({ src_mint: SOL, dst_mint: USDC, amount_in: '100000000', slippage_bps: 50, maxAccounts: 32, integrator_fee_bps: 25, integrator_fee_account: treasury })
+// capped.integratorFee is { amount, feeBps, mint, account }; destAmountOut and minAmountOut are what the trader receives after it.
+```
+
+The fee is taken in the token `integratorFee.mint` names. A token fee goes to that wallet's associated token account,
+which must already exist; a fee that cannot be paid is skipped and the swap still lands. A quote with no route under
+`maxAccounts` answers `-32055` (kind `route`): change the ask, a retry gives the same answer.
 
 With `@solana/kit` 8:
 
@@ -101,7 +109,7 @@ const signature = await carbium.rpc.sendTransaction(Buffer.from(tx.serialize()).
 
 Then poll `getSignatureStatuses` and resend the same bytes until the block height passes `swap.lastValidBlockHeight`.
 The SDK never retries `sendTransaction`. Quote again (never re-sign the old message) when the blockhash expires or
-when `swap` answers a route error that asks for a new quote (`-32095`, `-32074`, `-32081` to `-32083`, `-32096`, `-32093`).
+when `swap` answers a code that asks for a new quote (`-32095`, `-32074`, `-32081` to `-32083`, `-32096`, `-32093`).
 
 ## Errors and retries
 
@@ -249,7 +257,6 @@ the retry waits whole seconds there. `@carbium/sdk/stream` and the DCA API are s
 
 Body 51,200 bytes; batch 1 to 100 calls with at most two permit methods; DAS only with DAS; scans, `getSupply`,
 `getLargestAccounts`, the fee extras, `getTransactionsForAddress` and the quote plane never batch; a method the services
-do not serve is refused before it is sent; `getMultipleAccounts` takes up to 300 pubkeys on PRO and
-100 below it; `prices` up to 64 mints; token `batch` up to 500 mints.
+do not serve is refused before it is sent; token `batch` up to 500 mints.
 
 MIT. Issues: https://github.com/carbium-sh/carbium-js/issues. Docs: https://carbium.sh/docs and https://carbium.sh/skill.md.
