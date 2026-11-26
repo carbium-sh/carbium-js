@@ -1,6 +1,6 @@
 {
   "name": "@carbium/mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "mcpName": "sh.carbium/mcp",
   "description": "MCP server for Carbium's Solana services: RPC and DAS reads, quotes and prices, unsigned swap and DCA transactions, the account API, the token API and a docs search",
   "license": "MIT",

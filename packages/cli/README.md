@@ -50,7 +50,10 @@ https://github.com/carbium-sh/carbium-js/releases.
 ## Quick start
 
 ```sh
-# no key: the public hosts answer
+# no key: quotes, prices and the basic reads answer at 30 calls a minute per IP address, and so do the public hosts
+carbium quote So11111111111111111111111111111111111111112 EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v 100000000
+carbium rpc getSlot
+carbium test                 # getHealth and getLatestBlockhash
 carbium tokens lookup So11111111111111111111111111111111111111112
 carbium plans
 carbium dca health
@@ -60,9 +63,7 @@ carbium login --email you@example.com
 carbium login --key          # pasted at a hidden prompt, or piped: carbium login --key < key.txt
 carbium login --wallet <pubkey>
 
-# then
-carbium test                 # getHealth and getLatestBlockhash with your service key
-carbium rpc getSlot
+# then, with your service key: every method, at your plan's limits
 carbium rpc getBalance <pubkey> '{"commitment":"confirmed"}' --json
 carbium das getAssetsByOwner ownerAddress=<pubkey> limit=10
 carbium quote So11111111111111111111111111111111111111112 EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v 100000000
@@ -90,11 +91,11 @@ services host name on port 9443, or `config set streamUrl`), `--key-file <path>`
 | Group | Commands | Key |
 |---|---|---|
 | sign-in | `login --key` / `--email` / `--wallet` (`--full`, `--accept-terms`), `logout`, `whoami` | |
-| rpc | `rpc <method> [params...]` for 53 served methods (`rpc list`), `--params-json`, `--confirm-cost` | service |
+| rpc | `rpc <method> [params...]` for 53 served methods (`rpc list`), `--params-json`, `--confirm-cost` | service; none for `getHealth`, `getVersion`, `getSlot`, `getBlockHeight`, `getEpochInfo`, `getLatestBlockhash`, `isBlockhashValid`, `getGenesisHash` |
 | das | `das <method> key=value...` for the 10 DAS methods (`das list`) | service |
-| quote plane | `quote <src> <dst> <amount>`, `swap build <quote_id> <pubkey> [--out file]`, `prices <mint...>`, `health` | service (quote scope) |
+| quote plane | `quote <src> <dst> <amount>`, `swap build <quote_id> <pubkey> [--out file]`, `prices <mint...>`, `health` | none (30 calls a minute per IP address in all), or service (quote scope) |
 | tails | `ws tail account\|program\|logs\|signature\|slot\|root\|slotsUpdates\|block [arg] --count`, `stream tail --accounts\|--owners\|--tx-include\|--slots\|--blocks-meta\|--blocks\|--entry`, `stream slot\|block-height\|latest-blockhash\|blockhash-valid\|version\|ping\|replay-info` | service |
-| test | `test [--ws]`, `doctor`, `endpoints` | service |
+| test | `test [--ws]`, `doctor`, `endpoints` | none; service for `--ws` |
 | keys | `keys list`, `keys save <name>`, `keys create`, `keys rotate`, `keys revoke`, `keys delete`, `keys rename`, `keys scope`, `keys caps`, `keys allowlist`, `keys limits` | account (writes for changes) |
 | webhooks | `webhooks list\|get\|deliveries`, `webhooks create --key-id --url --address... --secret-file`, `update <id> [--url] [--address...] [--name] [--tx-status] [--key-id] [--auth-header-env VAR\|--clear-auth-header]`, `pause`, `resume`, `test`, `rotate --secret-file`, `delete` | account (writes for changes) |
 | account | `usage [--daily\|--hourly\|--latency\|--load]`, `balance`, `account`, `account invoices\|payments\|crypto-intent`, `modules`, `modules enable <module>`, `plans` | account |
@@ -110,7 +111,7 @@ offered. Expensive shapes (`getProgramAccounts` without filters, token scans wit
 walks, a full `getBlock`, `getMultipleAccounts` over 100 keys at 10 credits a key) stop with their cost unless you pass `--confirm-cost`.
 
 Destructive commands (`revoke`, `rotate`, `delete`) ask for confirmation on a terminal and need `-y` otherwise.
-Exit codes: 0 ok, 1 service error, 2 usage, 3 no key or refused, 4 credits or rate limit, 5 confirmation needed, 130
+Exit codes: 0 ok, 1 service error, 2 usage, 3 a key is needed or was refused, 4 credits or rate limit, 5 confirmation needed, 130
 interrupted. Keys come from `--key-file`, the environment (`CARBIUM_KEY`, `CARBIUM_ACCOUNT_KEY`) or the stored
 profile; a key typed on the command line is refused.
 

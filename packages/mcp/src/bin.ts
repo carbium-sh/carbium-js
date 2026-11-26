@@ -28,7 +28,7 @@ if (process.argv.includes('--version') || process.argv.includes('-v')) {
 }
 
 const prefix = (k: string | undefined): string => (k ? k.slice(0, 11) : 'none')
-log(`v${VERSION}; service key ${prefix(apiKey)}; account key ${prefix(accountKey)}; writes ${allowWrites ? 'on' : 'off'}`)
+log(`v${VERSION}; service key ${apiKey ? prefix(apiKey) : 'none (public methods only, 30 calls a minute per IP address)'}; account key ${prefix(accountKey)}; writes ${allowWrites ? 'on' : 'off'}`)
 
 const options = {
   ...(apiKey ? { apiKey } : {}),

@@ -133,8 +133,10 @@ export function failure(redactor: Redactor, e: unknown): CallToolResult {
       dca: 'the DCA API refused; see err and detail',
       tokens: 'the token API refused; see error',
       transport: 'no answer from the service; check the network and try again',
+      KEY_REQUIRED: 'this call needs a key: set CARBIUM_KEY (a free c_serv_ key from carbium.sh) in the MCP client config; with no key only the public methods are served',
+      PUBLIC_LIMITED: `the limit for calls with no key is used up: wait${e.retryAfterMs ? ` ${e.retryAfterMs} ms` : ''} before calling again, or set CARBIUM_KEY for a limit of your own`,
     }
-    return errorResult(redactor, e.message, { kind: e.kind, code: e.code, reason: e.reason, httpStatus: e.httpStatus, retryable: e.retryable, retryAfterMs: e.retryAfterMs, requestId: e.requestId, hint: hints[e.kind] ?? '' })
+    return errorResult(redactor, e.message, { kind: e.kind, code: e.code, reason: e.reason, httpStatus: e.httpStatus, retryable: e.retryable, retryAfterMs: e.retryAfterMs, requestId: e.requestId, hint: (e.reason && Object.hasOwn(hints, e.reason) ? hints[e.reason] : hints[e.kind]) ?? '' })
   }
   return errorResult(redactor, e instanceof Error ? e.message : String(e))
 }

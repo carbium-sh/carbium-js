@@ -55,10 +55,11 @@ printf 'CARBIUM_KEY=c_serv_%s\n' PLANTEDDOTENV0000000000 > .env
 printf 'preload = ["./pre.js"]\n' > bunfig.toml
 echo 'console.log("PRELOAD RAN")' > pre.js
 set +e
-out=$("$dest" test --endpoint http://127.0.0.1:9 2>&1)
+out=$("$dest" ws tail slot --count 1 --endpoint http://127.0.0.1:9 2>&1)
 code=$?
 set -e
 [ "$code" = 3 ] || bad "a .env in the folder was read: exit $code: $out"
+printf '%s' "$out" | grep -q 'no service key' || bad "a .env in the folder was read: $out"
 if printf '%s' "$out" | grep -q 'PRELOAD RAN'; then bad "a bunfig.toml preload ran"; fi
 ok ".env and bunfig.toml in the folder are ignored (exit 3, no service key)"
 key=c_serv_

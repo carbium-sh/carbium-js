@@ -1,6 +1,6 @@
 {
   "name": "carbium",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Command line for Carbium's Solana services: sign in, service keys, every RPC and DAS method by name, quotes and unsigned swaps, WebSocket and Carbon Stream tails, webhooks, usage, DCA and token lookups",
   "license": "MIT",
   "type": "module",

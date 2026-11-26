@@ -16,7 +16,8 @@ it names, so change the tag to update. Each version's notes are at https://githu
 
 ## Add it to your client
 
-The key goes in the server's environment, never in a URL. Without any key the three keyless tools work. Each client
+The key goes in the server's environment, never in a URL. Without any key five tools work: the three on the
+public hosts, and `carbium_swap` and the public methods of `carbium_rpc` at 30 calls a minute per IP address. Each client
 reads its own file and its own variable syntax.
 
 Claude Code, from the command line:
@@ -107,7 +108,7 @@ tools. It runs as a non-root user and works with `--read-only`.
   "mcpServers": {
     "carbium": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "CARBIUM_KEY", "ghcr.io/carbium-sh/carbium-mcp:0.1.0"],
+      "args": ["run", "-i", "--rm", "-e", "CARBIUM_KEY", "ghcr.io/carbium-sh/carbium-mcp:0.1.1"],
       "env": { "CARBIUM_KEY": "${CARBIUM_KEY}" }
     }
   }
@@ -116,8 +117,8 @@ tools. It runs as a non-root user and works with `--read-only`.
 
 | Variable | What it is | Tools it enables |
 |---|---|---|
-| none | | `carbium_docs_search`, `carbium_tokens`, `carbium_dca` |
-| `CARBIUM_KEY` | a service key (`c_serv_…`) from the carbium.sh dashboard | `carbium_rpc`, `carbium_das`, `carbium_swap` |
+| none | | `carbium_docs_search`, `carbium_tokens`, `carbium_dca`; `carbium_swap` and the public methods of `carbium_rpc`, at 30 calls a minute per IP address |
+| `CARBIUM_KEY` | a service key (`c_serv_…`) from the carbium.sh dashboard | every method of `carbium_rpc`, `carbium_das`, `carbium_swap` at your plan's limits |
 | `CARBIUM_ACCOUNT_KEY` | an account API key (`c_acct_…`) | `carbium_account` |
 | `CARBIUM_MCP_ALLOW_WRITES=1` | with an account key of full access | `carbium_account_write` |
 
@@ -128,9 +129,9 @@ tools. It runs as a non-root user and works with `--read-only`.
 | `carbium_docs_search` | searches carbium.sh/skill.md and llms.txt: methods, limits, errors, retry rules | none |
 | `carbium_tokens` | token names, symbols, decimals, logos and volume: lookup, search, batch, image_url | none |
 | `carbium_dca` | DCA reads (quote, positions, history, position, health) and unsigned builds (open, update, withdraw, close) | none |
-| `carbium_rpc` | any served Solana JSON-RPC read method with positional params; `sendTransaction` is not offered | service |
+| `carbium_rpc` | any served Solana JSON-RPC read method with positional params; `sendTransaction` is not offered | service; none for `getHealth`, `getVersion`, `getSlot`, `getBlockHeight`, `getEpochInfo`, `getLatestBlockhash`, `isBlockhashValid`, `getGenesisHash` |
 | `carbium_das` | the ten DAS methods with one params object (Helius field names) | service |
-| `carbium_swap` | quote, prices, health, and `build`: one unsigned swap transaction for `user_pubkey` | service (quote scope) |
+| `carbium_swap` | quote, prices, health, and `build`: one unsigned swap transaction for `user_pubkey` | none, or service (quote scope) |
 | `carbium_account` | whoami, overview, balance, keys_list, usage (daily, per key, load, hourly, latency), webhooks, modules, invoices, payments, crypto_intent, activity | account |
 | `carbium_account_write` | webhook pause, resume and test; key caps, limits, scope and allowlist; enable a free module plan | account, full access, writes on |
 

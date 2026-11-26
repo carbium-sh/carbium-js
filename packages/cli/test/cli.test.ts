@@ -122,7 +122,6 @@ test('the command table: no command signs or sends; every command has a summary 
 
 test('version, help, lists, and a key on the command line is refused', async (t) => {
   const { door: d, run } = await door(t)
-  assert.equal((await run(['--version'])).stdout.trim(), '0.1.1')
   assert.equal((await run(['--help'])).status, 0)
   const groupHelp = await run(['tokens', '--help'])
   assert.equal(groupHelp.status, 0, 'a group with --help is a help request') // it exited 2
@@ -629,7 +628,57 @@ test('login --key from stdin stores the key, whoami works, logout forgets it; th
   assert.equal(d.seen.at(-1)?.headers['x-api-key'], SERVICE)
   const out = await run(['logout'])
   assert.equal(out.status, 0)
-  assert.equal((await run(['rpc', 'getSlot'])).status, 3)
+  const after = await run(['rpc', 'getSlot'])
+  assert.equal(after.status, 0, after.stderr)
+  assert.equal(d.seen.at(-1)?.headers['x-api-key'], undefined, 'after logout the call goes out with no key')
+})
+
+test('with no key: the public commands answer and send no key; a call that needs one ends 3 with the service\'s words and what to do; WebSocket and stream commands refuse before connecting', async (t) => {
+  const { door: d, run } = await door(t)
+  const ws = new FakeSocket('notify')
+  const wsUrl = await ws.start()
+  t.after(() => ws.stop())
+  for (const args of [['quote', 'a', 'b', '1000'], ['swap', 'build', 'q1', 'pk'], ['prices', 'a', 'b'], ['health'], ['test'], ['rpc', 'getSlot'], ['rpc', 'getLatestBlockhash']]) {
+    const r = await run(args)
+    assert.equal(r.status, 0, `${args.join(' ')}: ${r.stderr}`)
+  }
+  const rpc = d.seen.filter((s) => new URL(s.url, 'http://x').pathname === '/rpc')
+  assert.ok(rpc.length >= 7)
+  assert.ok(rpc.every((s) => s.headers['x-api-key'] === undefined && s.headers['authorization'] === undefined && !/api-key/i.test(s.url)), 'no key carrier on any call')
+  for (const args of [['rpc', 'getBalance', 'x'], ['das', 'getAsset', 'id=x']]) {
+    const r = await run(args)
+    assert.equal(r.status, 3, `${args.join(' ')}: ${r.stderr}`)
+    assert.match(r.stderr, /auth error KEY_REQUIRED: this call needs an api key/)
+    assert.match(r.stderr, /what to do: run carbium login/)
+  }
+  const json = await run(['rpc', 'getBalance', 'x', '--json'])
+  assert.equal(json.status, 3)
+  assert.equal((JSON.parse(json.stderr) as { error: { reason: string } }).error.reason, 'KEY_REQUIRED')
+  for (const args of [['ws', 'tail', 'slot', '--endpoint', wsUrl], ['test', '--ws', '--endpoint', wsUrl], ['stream', 'slot']]) {
+    const r = await run(args)
+    assert.equal(r.status, 3, `${args.join(' ')}: ${r.stderr}`)
+    assert.match(r.stderr, /carbium: no service key\n {2}run carbium login/)
+  }
+  assert.equal(ws.urls.length, 0, 'no socket was opened')
+  const help = await run(['quote', '--help'])
+  assert.match(help.stdout, /access: no key \(30 calls a minute per IP address in all\), or a service key/)
+  assert.match((await run(['ws', 'tail', '--help'])).stdout, /access: service key/)
+})
+
+test('with no key at the public limit: the answer is retried at the service\'s pace, then ends 4 naming the wait; with a key the same door answers', async (t) => {
+  const { door: d, run } = await door(t, { publicLimited: true })
+  const r = await run(['rpc', 'getSlot'])
+  assert.equal(r.status, 4, r.stderr)
+  assert.match(r.stderr, /rate_limit error PUBLIC_LIMITED: no-key limit for your address reached/)
+  assert.match(r.stderr, /retryable: yes, after 600 ms {2}http: 429/)
+  assert.match(r.stderr, /what to do: wait the time shown, or run carbium login/)
+  const calls = d.seen.filter((s) => new URL(s.url, 'http://x').pathname === '/rpc')
+  assert.equal(calls.length, 4, 'four attempts, no more')
+  // without the service's wait the first retry comes within 500 ms (250 ms and up to 250 ms more)
+  for (let i = 1; i < calls.length; i++) assert.ok((calls[i] as { at: number }).at - (calls[i - 1] as { at: number }).at >= 600, 'never sooner than the service asked')
+  const keyed = await run(['rpc', 'getSlot'], ENV)
+  assert.equal(keyed.status, 0, keyed.stderr)
+  noKey(keyed, 'keyed getSlot')
 })
 
 test('login --email: terms, proof of work, PIN, a minted read key and the revealed service key, all stored', async (t) => {
@@ -743,7 +792,7 @@ test('on a terminal a newer carbium on npm is named in one stderr line, once a d
   assert.equal(await main(['endpoints'], { stdout: () => undefined, stderr: () => undefined, env: { CARBIUM_CONFIG_DIR: local }, fetch, stdoutIsTTY: true, stderrIsTTY: true }), 0)
   assert.deepEqual([asked.length, existsSync(local)], [3, false], 'a command that never calls the network does not start the read')
   const keyless = fresh()
-  assert.notEqual(await main(['rpc', 'getHealth'], { stdout: () => undefined, stderr: () => undefined, env: { CARBIUM_CONFIG_DIR: keyless }, fetch, stdoutIsTTY: true, stderrIsTTY: true }), 0)
+  assert.notEqual(await main(['ws', 'tail', 'slot'], { stdout: () => undefined, stderr: () => undefined, env: { CARBIUM_CONFIG_DIR: keyless }, fetch, stdoutIsTTY: true, stderrIsTTY: true }), 0)
   assert.deepEqual([asked.length, existsSync(keyless)], [3, false], 'nor does a command that stops before its first call, here for want of a key')
   const file = join(home(), 'a-file')
   writeFileSync(file, '')

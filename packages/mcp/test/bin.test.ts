@@ -36,7 +36,7 @@ const init = { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVe
 const inited = { jsonrpc: '2.0', method: 'notifications/initialized' }
 const list = { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }
 
-test('the bin over stdio: keyless lists three tools; with planted keys it lists more and never prints them, errors included', async (t) => {
+test('the bin over stdio: with no key it lists five tools and says the public limit; with planted keys it lists more and never prints them, errors included', async (t) => {
   const door = plantedDoor({ serviceKey: SERVICE, accountKey: ACCOUNT })
   const base = await door.start()
   t.after(() => door.stop())
@@ -44,8 +44,8 @@ test('the bin over stdio: keyless lists three tools; with planted keys it lists 
   const envUrls = { CARBIUM_ENDPOINT: urls.endpoint, CARBIUM_DASHBOARD_URL: urls.dashboardUrl, CARBIUM_DCA_URL: urls.dcaUrl, CARBIUM_TOKENS_URL: urls.tokensUrl, CARBIUM_DOCS_URLS: urls.docsUrls.join(',') }
   const keyless = await drive(envUrls, [init, inited, list])
   const tools = (l: string): string[] => (JSON.parse(l.trim().split('\n').find((x) => x.includes('"id":2')) as string) as { result: { tools: Array<{ name: string }> } }).result.tools.map((x) => x.name)
-  assert.deepEqual(tools(keyless.stdout), ['carbium_docs_search', 'carbium_tokens', 'carbium_dca'])
-  assert.match(keyless.stderr, /service key none; account key none; writes off/)
+  assert.deepEqual(tools(keyless.stdout), ['carbium_docs_search', 'carbium_tokens', 'carbium_dca', 'carbium_rpc', 'carbium_swap'])
+  assert.match(keyless.stderr, /service key none \(public methods only, 30 calls a minute per IP address\); account key none; writes off/)
   const keyed = await drive({ ...envUrls, CARBIUM_KEY: SERVICE, CARBIUM_ACCOUNT_KEY: ACCOUNT, CARBIUM_MCP_ALLOW_WRITES: '1' }, [
     init, inited, list,
     { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'carbium_rpc', arguments: { method: 'getBalance', params: ['x'] } } },
@@ -65,7 +65,7 @@ test('the bin over stdio: keyless lists three tools; with planted keys it lists 
 
 test('--version prints the version; a malformed key is refused with exit 2 and no key in the message', async () => {
   const v = await drive({}, [])
-  assert.equal(v.stderr.includes('v0.1.0'), true)
+  assert.equal(v.stderr.includes('v0.1.1'), true)
   const bad = await drive({ CARBIUM_KEY: 'c_acct_' + 'WRONGPLACE000000000000' }, [])
   assert.equal(bad.code, 2)
   assert.match(bad.stderr, /CARBIUM_KEY must be a full service key/)

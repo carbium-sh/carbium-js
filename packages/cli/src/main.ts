@@ -26,7 +26,7 @@ export interface OptSpec {
   value?: string
 }
 
-export type Access = 'local' | 'keyless' | 'service' | 'account' | 'write' | 'destructive'
+export type Access = 'local' | 'keyless' | 'public' | 'service' | 'account' | 'write' | 'destructive'
 
 export interface Command {
   path: string[]
@@ -124,6 +124,7 @@ const SECRET_ARG = /(?:^|[^A-Za-z0-9])(c_serv_|c_acct_|whsec_)[A-Za-z0-9]/
 export const ACCESS_HELP: Record<Access, string> = {
   local: 'local',
   keyless: 'no key',
+  public: 'no key (30 calls a minute per IP address in all), or a service key',
   service: 'service key',
   account: 'account key',
   write: 'account key, writes on',
@@ -330,6 +331,11 @@ export async function main(argv: string[], ioIn: Partial<Io> = {}): Promise<numb
     }) as typeof fetch,
   }
   let selfCache: Promise<AccountApiKey> | undefined
+  const heldServiceKey = (): string | undefined => {
+    if (fileKey?.startsWith('c_serv_')) return fileKey
+    const name = flags.serviceKey ?? profile.defaultServiceKey ?? Object.keys(profile.serviceKeys ?? {})[0]
+    return io.env['CARBIUM_KEY'] || (name ? profile.serviceKeys?.[name]?.value : undefined)
+  }
 
   const ctx: Ctx = {
     io,
@@ -360,13 +366,9 @@ export async function main(argv: string[], ioIn: Partial<Io> = {}): Promise<numb
       if (s) secrets.add(s)
     },
     serviceKey: () => {
-      if (fileKey?.startsWith('c_serv_')) return fileKey
-      const env = io.env['CARBIUM_KEY']
-      if (env) return env
-      const name = flags.serviceKey ?? profile.defaultServiceKey ?? Object.keys(profile.serviceKeys ?? {})[0]
-      const k = name ? profile.serviceKeys?.[name] : undefined
-      if (!k) throw new CliError(EXIT.auth, 'no service key', 'run carbium login (email or wallet), carbium keys create, or carbium keys save <name>; or set CARBIUM_KEY')
-      return k.value
+      const k = heldServiceKey()
+      if (!k) throw new CliError(EXIT.auth, 'no service key', KEY_HINT)
+      return k
     },
     accountKey: () => {
       if (fileKey?.startsWith('c_acct_')) return fileKey
@@ -378,7 +380,8 @@ export async function main(argv: string[], ioIn: Partial<Io> = {}): Promise<numb
     endpoint: () => flags.endpoint ?? profile.endpoint ?? 'https://services.carbium.sh',
     streamUrl: () => flags.streamUrl ?? profile.streamUrl ?? `https://${new URL(ctx.endpoint()).hostname}:9443`,
     dashboard: () => flags.dashboard ?? profile.dashboard ?? 'https://carbium.sh',
-    carbium: () => createCarbium({ apiKey: ctx.serviceKey(), endpoint: ctx.endpoint(), ...fetchOpt }),
+    // with no key the call still goes out: the services answer their public methods and refuse the rest (KEY_REQUIRED)
+    carbium: () => createCarbium({ apiKey: heldServiceKey() ?? '', endpoint: ctx.endpoint(), ...fetchOpt }),
     account: () => new CarbiumAccount({ apiKey: ctx.accountKey(), baseUrl: ctx.dashboard(), ...fetchOpt }),
     dca: () => new CarbiumDca({ baseUrl: flags.dcaUrl ?? profile.dcaUrl ?? 'https://dex.carbium.io/api/dca', ...fetchOpt }),
     tokens: () => new CarbiumTokens({ baseUrl: flags.tokensUrl ?? profile.tokensUrl ?? 'https://tokens.carbium.io', ...fetchOpt }),
@@ -428,7 +431,11 @@ function report(e: unknown, ctx: Ctx): number {
   return EXIT.service
 }
 
+const KEY_HINT = 'run carbium login (email or wallet), carbium keys create, or carbium keys save <name>; or set CARBIUM_KEY'
+
 const HINTS: ReadonlyArray<[RegExp, string]> = [
+  [/needs an api key/i, KEY_HINT],
+  [/no-key limit/i, `wait the time shown, or ${KEY_HINT}`],
   [/unknown api key/i, 'send the full key: carbium login, or carbium keys save <name>'],
   [/not enabled for (grpc|websocket|rpc|quote|das)/i, 'add the scope to the key: carbium keys scope <id> rpc,ws,grpc,quote,das (needs writes on)'],
   [/not included in this tier/i, 'Carbon Stream needs DEV, BUSINESS or PRO; on FREE use carbium ws tail'],

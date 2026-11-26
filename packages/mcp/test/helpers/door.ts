@@ -7,7 +7,12 @@ export interface DoorOptions {
   serviceKey: string
   accountKey: string
   access?: 'full' | 'read'
+  /** Calls with no key have used up the public limit: each gets 429 PUBLIC_LIMITED. */
+  publicLimited?: boolean
 }
+
+/** What services.carbium.sh answers with no key; every other method gets 401 KEY_REQUIRED. */
+export const PUBLIC_METHODS: readonly string[] = ['quote', 'swap', 'prices', 'health', 'getHealth', 'getVersion', 'getSlot', 'getBlockHeight', 'getEpochInfo', 'getLatestBlockhash', 'isBlockhashValid', 'getGenesisHash']
 
 export function plantedDoor(o: DoorOptions): PlantedServer {
   const access = o.access ?? 'full'
@@ -17,6 +22,10 @@ export function plantedDoor(o: DoorOptions): PlantedServer {
     if (p === '/rpc') {
       const body = JSON.parse(req.body) as { id: number; method: string; params?: unknown[] }
       const ok = (result: unknown): Reply => ({ status: 200, body: { jsonrpc: '2.0', id: body.id, result } })
+      if (!req.headers['x-api-key']) {
+        if (!PUBLIC_METHODS.includes(body.method)) return { status: 401, body: { jsonrpc: '2.0', id: body.id, error: { code: -32001, message: 'this call needs an api key: calls with no key serve only the public methods; get a free key at carbium.sh', data: { reason: 'KEY_REQUIRED', retryable: false } } } }
+        if (o.publicLimited) return { status: 429, headers: { 'retry-after': '1', 'retry-after-ms': '600' }, body: { jsonrpc: '2.0', id: body.id, error: { code: -32005, message: 'no-key limit for your address reached; retry after Retry-After, or use a free api key for a limit of your own', data: { reason: 'PUBLIC_LIMITED', retryable: true } } } }
+      }
       switch (body.method) {
         case 'getBalance': return { status: 200, body: { jsonrpc: '2.0', id: body.id, error: { code: -32602, message: `Invalid param: the door saw key ${o.serviceKey} at /rpc?api-key=${o.serviceKey}` } } }
         case 'getHealth': return ok('ok')

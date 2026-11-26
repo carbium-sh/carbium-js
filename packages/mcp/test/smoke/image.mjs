@@ -18,7 +18,7 @@ const SECRET = /(c_serv_|c_acct_|whsec_)[A-Za-z0-9+/=_-]{5,}|npm_[A-Za-z0-9]{36}
 const KEY = new RegExp(`${SECRET.source}|CARBIUM_[A-Z_]+=\\S+`, 'g')
 const SECRET_FILE = /(^|\/)(\.npmrc|\.yarnrc(\.yml)?|\.env(\.[^/]*)?|\.netrc|\.git-credentials)$/
 const shown = (m) => m.replace(/^(c_serv_|c_acct_|whsec_|npm_|gh[pousr]_|CARBIUM_[A-Z_]+=)\S*/, '$1[redacted]')
-const KEYLESS = ['carbium_docs_search', 'carbium_tokens', 'carbium_dca']
+const KEYLESS = ['carbium_docs_search', 'carbium_tokens', 'carbium_dca', 'carbium_rpc', 'carbium_swap']
 let failed = 0
 const check = (ok, what, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'} ${what}${detail ? `: ${detail}` : ''}`) }
 const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', maxBuffer: 64 << 20 })
@@ -106,9 +106,9 @@ check(bare.parsed !== null && bare.parsed.every((l) => l.jsonrpc === '2.0'), 'st
 check(bare.parsed?.find((l) => l.id === 1)?.result?.serverInfo?.name !== undefined, 'initialize answered', JSON.stringify(bare.parsed?.find((l) => l.id === 1)?.result?.serverInfo ?? {}))
 const t0 = toolsOf(bare)
 console.log(`  tools with no key: ${t0.join(', ')}`)
-check(t0.length === KEYLESS.length && KEYLESS.every((t) => t0.includes(t)), 'no key given: only the three keyless tools are listed')
+check(t0.length === KEYLESS.length && KEYLESS.every((t) => t0.includes(t)), 'no key given: the five tools that work with no key are listed, carbium_das is not')
 check(!t0.includes('carbium_account_write') && readOnly(bare), 'the write tool is not listed; every listed tool is read-only')
-check(/service key none; account key none; writes off/.test(bare.err), 'startup line: no keys, writes off', bare.err.trim().split('\n')[0].replace(/(c_serv_|c_acct_)[A-Za-z0-9]*/g, '$1[redacted]'))
+check(/service key none \(public methods only, 30 calls a minute per IP address\); account key none; writes off/.test(bare.err), 'startup line: no keys, the public limit, writes off', bare.err.trim().split('\n')[0].replace(/(c_serv_|c_acct_)[A-Za-z0-9]*/g, '$1[redacted]'))
 check(bare.uid !== '' && bare.uid.split(',').every((u) => /^[1-9][0-9]*$/.test(u)), 'the server process runs as a non-root uid', bare.uid)
 
 // 5. The client line `docker run -i --rm -e CARBIUM_KEY <image>`: the key arrives by name and never shows.

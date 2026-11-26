@@ -37,10 +37,10 @@ export class CliDoor {
         const rec: Seen = { at: Date.now(), body, headers: req.headers, url: req.url ?? '', method: req.method ?? '' }
         this.seen.push(rec)
         const own = this.#route(rec)
-        const reply = own ? Promise.resolve({ status: own.status, type: 'application/json', text: JSON.stringify(own.body) }) : this.#pass(rec)
+        const reply = own ? Promise.resolve({ status: own.status, type: 'application/json', text: JSON.stringify(own.body), retry: {} }) : this.#pass(rec)
         reply.then(
           (r) => {
-            res.writeHead(r.status, { 'content-type': r.type })
+            res.writeHead(r.status, { 'content-type': r.type, ...r.retry })
             res.end(r.text)
           },
           () => {
@@ -72,11 +72,13 @@ export class CliDoor {
     return undefined
   }
 
-  async #pass(rec: Seen): Promise<{ status: number; type: string; text: string }> {
+  async #pass(rec: Seen): Promise<{ status: number; type: string; text: string; retry: Record<string, string> }> {
     const headers: Record<string, string> = {}
     for (const h of ['content-type', 'accept', 'authorization', 'x-api-key']) if (typeof rec.headers[h] === 'string') headers[h] = rec.headers[h]
     const r = await fetch(this.#innerUrl + rec.url, { method: rec.method, headers, ...(rec.method === 'GET' || rec.method === 'HEAD' ? {} : { body: rec.body }) })
-    return { status: r.status, type: r.headers.get('content-type') ?? 'application/json', text: await r.text() }
+    const retry: Record<string, string> = {}
+    for (const h of ['retry-after', 'retry-after-ms']) if (r.headers.get(h)) retry[h] = r.headers.get(h) as string
+    return { status: r.status, type: r.headers.get('content-type') ?? 'application/json', text: await r.text(), retry }
   }
 
   async start(): Promise<string> {

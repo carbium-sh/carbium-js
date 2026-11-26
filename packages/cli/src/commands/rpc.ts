@@ -68,7 +68,7 @@ const confirmCost = { 'confirm-cost': { type: 'boolean' as const, help: 'run a s
 
 const rpcCommands: Command[] = [
   {
-    path: ['rpc'], summary: `call a served JSON-RPC method by name with positional params (JSON values); ${RPC_METHODS.length} methods, see carbium rpc list`, usage: '<method> [params...]', access: 'service',
+    path: ['rpc'], summary: `call a served JSON-RPC method by name with positional params (JSON values); ${RPC_METHODS.length} methods, see carbium rpc list; with no key the services answer only their public methods`, usage: '<method> [params...]', access: 'service',
     options: { ...confirmCost, 'params-json': { type: 'string', value: '<json|->', help: 'the whole params array as JSON (- reads stdin)' } },
     run: async (ctx) => {
       const [method, ...rest] = ctx.positionals
@@ -97,7 +97,7 @@ const rpcCommands: Command[] = [
   },
   { path: ['das', 'list'], summary: 'the served DAS methods (offline)', access: 'local', run: async () => DAS_METHODS },
   {
-    path: ['quote'], summary: 'a swap quote: amount in base units of the source mint (--rest: the old path, GET /cq1/quote)', usage: '<src_mint> <dst_mint> <amount_in>', access: 'service',
+    path: ['quote'], summary: 'a swap quote: amount in base units of the source mint (--rest: the old path, GET /cq1/quote)', usage: '<src_mint> <dst_mint> <amount_in>', access: 'public',
     options: { 'slippage-bps': { type: 'string', value: '<n>', help: 'slippage in basis points (default 50)' }, dex: { type: 'string', value: '<labels>', help: 'pin venue families, comma separated' }, 'tx-version': { type: 'string', value: '0|1', help: 'v0 with lookup tables (default) or v1' }, rest: { type: 'boolean', help: 'ask GET /cq1/quote instead: one plain object, every value a string; takes no --dex or --tx-version' } },
     run: async (ctx) => {
       const [src, dst, amount] = ctx.positionals
@@ -112,7 +112,7 @@ const rpcCommands: Command[] = [
     },
   },
   {
-    path: ['swap', 'build'], summary: 'build ONE unsigned swap transaction from a quote for your own wallet to sign and send; the CLI never signs or sends', usage: '<quote_id> <user_pubkey>', access: 'service',
+    path: ['swap', 'build'], summary: 'build ONE unsigned swap transaction from a quote for your own wallet to sign and send; the CLI never signs or sends', usage: '<quote_id> <user_pubkey>', access: 'public',
     options: { 'cu-price': { type: 'string', value: '<micro-lamports>', help: 'priority price per compute unit (default: the network price)' }, out: { type: 'string', value: '<path>', help: 'also write the base64 transaction to this new file' } },
     run: async (ctx) => {
       const [quote_id, user_pubkey] = ctx.positionals
@@ -128,9 +128,9 @@ const rpcCommands: Command[] = [
       return built
     },
   },
-  { path: ['prices'], summary: 'USD prices and TVL for up to 64 mints', usage: '<mint...>', access: 'service', run: async (ctx) => { if (!ctx.positionals.length) throw new CliError(EXIT.usage, 'usage: carbium prices <mint...>'); return ctx.carbium().quote.prices({ mints: ctx.positionals }) } },
+  { path: ['prices'], summary: 'USD prices and TVL for up to 64 mints', usage: '<mint...>', access: 'public', run: async (ctx) => { if (!ctx.positionals.length) throw new CliError(EXIT.usage, 'usage: carbium prices <mint...>'); return ctx.carbium().quote.prices({ mints: ctx.positionals }) } },
   {
-    path: ['health'], summary: 'the door (getHealth) and the quote plane (health) in one answer', access: 'service',
+    path: ['health'], summary: 'the door (getHealth) and the quote plane (health) in one answer', access: 'public',
     run: async (ctx) => {
       const c = ctx.carbium()
       const t0 = Date.now()
@@ -141,8 +141,9 @@ const rpcCommands: Command[] = [
     },
   },
   {
-    path: ['test'], summary: 'reach the services with this key: getHealth, getLatestBlockhash and, with --ws, one slot notification', access: 'service', options: { ws: { type: 'boolean', help: 'also open a WebSocket and wait for one slot notification' } },
+    path: ['test'], summary: 'reach the services, with your key when one is set: getHealth, getLatestBlockhash and, with --ws (needs a key), one slot notification', access: 'public', options: { ws: { type: 'boolean', help: 'also open a WebSocket and wait for one slot notification' } },
     run: async (ctx) => {
+      if (ctx.bool('ws')) ctx.serviceKey() // a WebSocket takes a key: refuse here, not at the handshake
       const c = ctx.carbium()
       const checks: Array<Record<string, unknown>> = []
       let t0 = Date.now()

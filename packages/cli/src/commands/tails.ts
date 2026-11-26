@@ -46,6 +46,7 @@ register([
       const commitment = ctx.str('commitment') as 'processed' | 'confirmed' | 'finalized' | undefined
       if (sub === 'block' && commitment === 'processed') throw new CliError(EXIT.usage, 'blockSubscribe takes --commitment confirmed or finalized, not processed')
       let fail: (e: unknown) => void = () => undefined
+      ctx.serviceKey() // a WebSocket takes a key: refuse here, not at the handshake
       // a fatal close (a revoked key, credits gone) or a refused re-subscribe ends the tail with its error
       const socket = ctx.carbium().socket({ onReseed: (i) => ctx.err(`reseed: code ${i.code} ${i.reason} gap ${i.gap}; re-read state you keep`), onState: (s, i) => ctx.err(`socket ${s}${i ? ` ${i.code} ${i.reason}` : ''}`), onFatal: (e) => fail(e), onError: (e) => fail(e) })
       let n = 0

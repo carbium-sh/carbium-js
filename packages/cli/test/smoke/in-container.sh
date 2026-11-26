@@ -8,7 +8,7 @@ if command -v bun >/dev/null 2>&1; then
   RT="bun $(bun --version)"
   # the CLI's @carbium/sdk dependency resolves to the packed SDK, not the registry
   printf '{"name":"smoke","private":true,"overrides":{"@carbium/sdk":"file:%s"}}\n' /pkg/carbium-sdk-*.tgz >package.json
-  bun add /pkg/carbium-sdk-*.tgz /pkg/carbium-0.1.1.tgz
+  bun add /pkg/carbium-sdk-*.tgz /pkg/carbium-0.1.2.tgz
   CLI="bun $PWD/node_modules/carbium/dist/bin.mjs"
   JS=bun
 else
@@ -22,9 +22,9 @@ echo "$RT"
 export HOME="$PWD/home" XDG_CONFIG_HOME="$PWD/home/cfg"
 mkdir -p "$HOME"
 echo "--- tarball contents"
-tar -tzf /pkg/carbium-0.1.1.tgz | sort | tee files.txt | head -20
+tar -tzf /pkg/carbium-0.1.2.tgz | sort | tee files.txt | head -20
 if grep -vE '^package/(dist/|README\.md$|LICENSE$|package\.json$)' files.txt; then echo "unexpected file in the tarball"; exit 1; fi
-test "$($CLI --version)" = "0.1.1"
+test "$($CLI --version)" = "0.1.2"
 echo "--- README quick start, the keyless lines, against the live hosts"
 $CLI tokens lookup So11111111111111111111111111111111111111112 | head -4
 $CLI plans --json | head -c 120; echo
@@ -38,9 +38,11 @@ if [ -n "${CARBIUM_KEY:-}" ]; then
   echo "$out" | grep -q getLatestBlockhash || exit 1
   echo "$out" | grep -q "$CARBIUM_KEY" && { echo "the key leaked"; exit 1; }
 else
-  set +e; out=$($CLI test 2>&1); code=$?; set -e
+  # with no key the public methods answer; this suite sends no call with no key, so it checks the refusal that stays local
+  set +e; out=$($CLI ws tail slot --count 1 --endpoint http://127.0.0.1:9 2>&1); code=$?; set -e
   echo "$out"
-  [ "$code" -eq 3 ] || { echo "keyless carbium test must exit 3 (no key), got $code"; exit 1; }
+  [ "$code" -eq 3 ] || { echo "with no key, carbium ws tail must exit 3 before connecting, got $code"; exit 1; }
+  echo "$out" | grep -q 'no service key' || { echo "with no key, carbium ws tail must refuse before connecting"; exit 1; }
   echo "--- a planted key in the environment never prints (sent to a closed local port, never to services.carbium.sh)"
   planted="c_serv_"; planted="${planted}PLANTEDSMOKE0000000000"
   set +e; out=$(env CARBIUM_KEY="$planted" $CLI test --endpoint http://127.0.0.1:9 2>&1); code=$?; set -e

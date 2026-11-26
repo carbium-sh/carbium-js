@@ -8,9 +8,9 @@ npm init -y >/dev/null
 npm install --no-audit --no-fund --loglevel=error /pkg/*.tgz
 export PATH="$PWD/node_modules/.bin:$PATH"
 echo "--- tarball contents"
-tar -tzf /pkg/carbium-mcp-0.1.0.tgz | sort | tee files.txt | head -20
+tar -tzf /pkg/carbium-mcp-0.1.1.tgz | sort | tee files.txt | head -20
 if grep -vE '^package/(dist/|server\.json$|README\.md$|LICENSE$|package\.json$)' files.txt; then echo "unexpected file in the tarball"; exit 1; fi
-test "$(carbium-mcp --version)" = "0.1.0"
+test "$(carbium-mcp --version)" = "0.1.1"
 echo "--- stdio: initialize, tools/list, keyless token lookup (live), with a planted key in the environment"
 cat > drive.mjs <<'JS'
 import { spawn } from 'node:child_process'

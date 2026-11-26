@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport } from '@modelcontextprotocol/server'
 import { createServer, RPC_METHODS, UNTRUSTED_NOTE, clean, dataResult, errorResult, failure, Redactor, type ServerOptions } from '../dist/index.mjs'
-import { plantedDoor, doorUrls } from './helpers/door.ts'
+import { plantedDoor, doorUrls, PUBLIC_METHODS } from './helpers/door.ts'
 
 const SERVICE = 'c_serv_' + 'PLANTEDservice00000000'
 const ACCOUNT = 'c_acct_' + 'PLANTEDaccount00000000'
@@ -66,7 +66,7 @@ test('every tool, driven once per fixture with planted keys, leaks neither key i
   assert.equal(balance?.isError, true, 'getBalance came back as an error')
   const sent = door.seen.find((s) => s.url === '/rpc' && (JSON.parse(s.body) as { method: string }).method === 'getBalance')
   assert.ok(sent, 'getBalance reached the door')
-  const raw = await (await fetch(`${base}/rpc`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: sent.body })).text()
+  const raw = await (await fetch(`${base}/rpc`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': SERVICE }, body: sent.body })).text()
   assert.ok(raw.includes(SERVICE), 'the door answer to getBalance carries the planted service key')
   assert.doesNotMatch(text(balance), new RegExp(SERVICE.slice(7)))
 })
@@ -172,12 +172,25 @@ test('whoami and keys_list show at most 11 prefix characters and a null prefix a
   assert.deepEqual((keys.structuredContent as { result: Array<{ prefix: unknown }> }).result.map((k) => k.prefix), [null, 'c_serv_AbCd'])
 })
 
-test('keyless: three tools, each answering with no key at all', async (t) => {
+test('with no key: five tools; carbium_rpc offers exactly the public methods; each answers and no call carries a key', async (t) => {
   const door = plantedDoor({ serviceKey: SERVICE, accountKey: ACCOUNT })
   const base = await door.start()
   const { client, close } = await connect(doorUrls(base))
   t.after(async () => { await close(); await door.stop() })
-  assert.deepEqual((await client.listTools()).tools.map((x) => x.name), ['carbium_docs_search', 'carbium_tokens', 'carbium_dca'])
+  const { tools } = await client.listTools()
+  assert.deepEqual(tools.map((x) => x.name), ['carbium_docs_search', 'carbium_tokens', 'carbium_dca', 'carbium_rpc', 'carbium_swap'])
+  const rpc = tools.find((x) => x.name === 'carbium_rpc') as unknown as { description?: string; inputSchema: { properties: { method: { enum: string[] } } } }
+  assert.deepEqual(rpc.inputSchema.properties.method.enum, PUBLIC_METHODS.filter((m) => m.startsWith('get') || m === 'isBlockhashValid').sort())
+  assert.match(rpc.description ?? '', /No CARBIUM_KEY is set: 30 calls a minute per IP address/)
+  assert.doesNotMatch(rpc.description ?? '', /getBalance|getProgramAccounts/)
+  assert.match(client.getInstructions() ?? '', /No CARBIUM_KEY is set/)
+  const slot = await client.callTool({ name: 'carbium_rpc', arguments: { method: 'getSlot' } })
+  assert.equal(slot.isError, undefined, text(slot))
+  assert.match(text(slot), /1234/)
+  const quote = await client.callTool({ name: 'carbium_swap', arguments: { action: 'quote', src_mint: 'a', dst_mint: 'b', amount_in: '1000' } })
+  assert.equal(quote.isError, undefined, text(quote))
+  assert.match(text(quote), /q1/)
+  assert.equal(door.seen.filter((s) => s.url === '/rpc').length, 2)
   const t1 = await client.callTool({ name: 'carbium_tokens', arguments: { action: 'lookup', mint: 'So1' } })
   assert.equal(t1.isError, undefined)
   assert.match(text(t1), /Wrapped SOL/)
@@ -188,6 +201,18 @@ test('keyless: three tools, each answering with no key at all', async (t) => {
   const h = await client.callTool({ name: 'carbium_dca', arguments: { action: 'health' } })
   assert.equal(h.isError, undefined)
   for (const s of door.seen) assert.equal(s.headers['x-api-key'], undefined)
+})
+
+test('with no key at the public limit: the tool answers an error that names the wait and the key, after four attempts and no more', async (t) => {
+  const door = plantedDoor({ serviceKey: SERVICE, accountKey: ACCOUNT, publicLimited: true })
+  const base = await door.start()
+  const { client, close } = await connect(doorUrls(base))
+  t.after(async () => { await close(); await door.stop() })
+  const r = await client.callTool({ name: 'carbium_rpc', arguments: { method: 'getSlot' } })
+  assert.equal(r.isError, true)
+  assert.match(text(r), /PUBLIC_LIMITED/)
+  assert.match(text(r), /wait 600 ms before calling again, or set CARBIUM_KEY for a limit of your own/)
+  assert.equal(door.seen.filter((s) => s.url === '/rpc').length, 4)
 })
 
 test('swap and DCA builds: exactly one upstream call each, one unsigned transaction back, nothing afterwards', async (t) => {
