@@ -18,8 +18,10 @@ https://github.com/carbium-sh/carbium-js/releases.
 
 ## Quick start
 
-A service key (`c_serv_…`) comes from the dashboard at carbium.sh. Without one the call reaches the door and is refused
-with 401, which the quick start prints.
+A service key (`c_serv_…`) comes from the dashboard at carbium.sh. Without one, services.carbium.sh answers twelve
+methods at 30 calls a minute per IP address: `quote`, `swap`, `prices`, `health` and the reads `getHealth`,
+`getVersion`, `getSlot`, `getBlockHeight`, `getEpochInfo`, `getLatestBlockhash`, `isBlockhashValid` and
+`getGenesisHash`. Every other call is refused with 401, which the quick start's catch prints.
 
 ```js
 import { createCarbium, isCarbiumError } from '@carbium/sdk'
@@ -70,7 +72,8 @@ uses `quote`.
 
 ### Swap: quote, build, sign with your own wallet, send
 
-The quote plane needs the account's quote module (free plan) and a key with the quote scope.
+With a key, the quote plane needs the account's quote module (free plan) and the quote scope on the key. With no key
+it answers at the limit above.
 
 ```ts
 const quote = await carbium.quote.quote({ src_mint: SOL, dst_mint: USDC, amount_in: '100000000', slippage_bps: 50 })

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs inside a plain node image: installs the packed tarball, lists it, runs the README's first code block (the quick
 # start) as ESM, requires the CJS build, imports every subpath. CARBIUM_KEY may be unset: then the quick start must
-# print the 401 refusal and no key.
+# print the blockhash, or the public limit's refusal, and no key.
 set -eu
 cd "$(mktemp -d)"
 echo "node $(node -v) npm $(npm -v)"
@@ -22,7 +22,9 @@ if [ -n "${CARBIUM_KEY:-}" ]; then
   echo "$out" | grep -q '^blockhash ' || { echo "with a key the quick start must print the blockhash"; exit 1; }
   echo "$out" | grep -q "$CARBIUM_KEY" && { echo "the key leaked into the output"; exit 1; }
 else
-  echo "$out" | grep -qE '^auth 401 -32001 ' || { echo "keyless, the quick start must print the 401 refusal"; exit 1; }
+  # with no key services.carbium.sh answers getLatestBlockhash, 30 calls a minute per IP address; on a shared address
+  # that has used them up, the limit's own refusal is the other answer the quick start can print
+  echo "$out" | grep -qE '^(blockhash |rate_limit 429 -32005 PUBLIC_LIMITED )' || { echo "with no key the quick start must print the blockhash, or the public limit's refusal"; exit 1; }
 fi
 echo "--- cjs and subpaths"
 node -e "const s=require('@carbium/sdk'); if (typeof s.createCarbium!=='function'||typeof s.isCarbiumError!=='function') process.exit(1); console.log('cjs ok', Object.keys(s).length, 'exports')"
